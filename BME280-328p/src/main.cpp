@@ -39,11 +39,11 @@ void checkPress()
 {
     if(press > prev_press + 8 )
     {
-        digitalWriteFast(7,HIGH);
-        digitalWriteFast(13, HIGH);
+        digitalWriteFast(7,HIGH);   // SPK
+        //digitalWriteFast(13, HIGH); // LED
         delay(4/4);
-        digitalWriteFast(7,LOW);
-        digitalWriteFast(13, LOW);
+        digitalWriteFast(7,LOW);    // SPK
+        //digitalWriteFast(13, LOW);  // LED
 
         // do RF!
     }
@@ -63,13 +63,13 @@ void checkPress()
  }
 
 void setup() {
-    Serial.begin(9600);
+    //Serial.begin(9600);
     //clock_prescale_set(clock_div_1);
     
     for (byte i = 0; i <= A5; i++)
     {
         pinModeFast(i, OUTPUT);    // changed as per below
-        digitalWriteFast(i, LOW);  //     ditto
+        digitalWriteFast(i, HIGH);  //     ditto
     }
     // setup pin 12 as a DigitalOut and turn it off
 
@@ -87,31 +87,10 @@ void setup() {
 
 
 void loop() {
-    //power_adc_disable(); // ADC converter
-    //power_spi_disable(); // SPI
-    //power_usart0_disable();// Serial (USART)
-    //power_timer0_disable();// Timer 0
-    //power_timer1_disable();// Timer 1
-    //power_timer2_disable();// Timer 2
-    //power_twi_enable(); // TWI (I2C)
-
     bme.begin(0x76);
     printValues();
     checkPress();
 
-    //power_adc_disable(); // ADC converter
-    //power_spi_disable(); // SPI
-    //power_usart0_disable();// Serial (USART)
-    //power_timer0_disable();// Timer 0
-    //power_timer1_disable();// Timer 1
-    //power_timer2_disable();// Timer 2
-    //power_twi_disable(); // TWI (I2C)
-
     //LowPower.idle(SLEEP_1S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF, SPI_OFF, USART0_OFF, TWI_OFF);
     LowPower.powerDown(SLEEP_500MS, ADC_OFF, BOD_OFF);
-
-    //gotosleep();
-    
-    // cancel sleep as a precaution
-    //sleep_disable();
 }
