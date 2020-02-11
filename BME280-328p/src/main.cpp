@@ -72,7 +72,7 @@ void setup() {
 
     power_adc_disable(); // ADC converter
     power_spi_disable(); // SPI
-    power_usart0_disable();// Serial (USART)
+    //power_usart0_disable();// Serial (USART)
     //power_timer0_disable();// Timer 0
     power_timer1_disable();// Timer 1
     power_timer2_disable();// Timer 2
