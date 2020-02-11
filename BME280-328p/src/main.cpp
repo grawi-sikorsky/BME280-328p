@@ -18,57 +18,34 @@
 Adafruit_BME280 bme; // I2C
 
 unsigned long delayTime;
+float press, prev_press;
+
+    #define WDT_0125s()             WDTCSR = (1<<WDIE)|(1<<WDE)|(1<<WDP1)|(1<<WDP0)             //4
+    #define WDT_025s()              WDTCSR = (1<<WDIE)|(1<<WDE)|(1<<WDP2)                       //5
+    #define WDT_05s()               WDTCSR = (1<<WDIE)|(1<<WDE)|(1<<WDP2)|(1<<WDP0)             //6
+    #define WDT_1s()                WDTCSR = (1<<WDIE)|(1<<WDE)|(1<<WDP2)|(1<<WDP1)             //7
+    #define WDT_2s()                WDTCSR = (1<<WDIE)|(1<<WDE)|(1<<WDP2)|(1<<WDP1)|(1<<WDP0)   //8
+
 
 void printValues() {
-    Serial.print("Temperature = ");
-    Serial.print(bme.readTemperature());
-    Serial.println(" *C");
+    prev_press = press;
+    press = bme.readPressure();
 
-    Serial.print("Pressure = ");
-    Serial.print(bme.readPressure() / 100.0F);
-    Serial.println(" hPa");
-
-    Serial.print("Humidity = ");
-    Serial.print(bme.readHumidity());
-    Serial.println(" %");
-
-    Serial.println();
+    Serial.print("P= ");
+    Serial.println(press / 100.0F);
 }
-// watchdog interrupt
-ISR (WDT_vect) 
+void checkPress()
 {
-   wdt_disable();  // disable watchdog
-}  // end of WDT_vect
- 
-
-void setup() {
-    Serial.begin(9600);
-    while(!Serial);    // time to get serial running
-
-    for (byte i = 0; i <= A5; i++)
+    if(press > prev_press + 10 )
     {
-        pinMode (i, OUTPUT);    // changed as per below
-        digitalWrite (i, LOW);  //     ditto
-    }
-
-    unsigned status;
-    
-    // default settings
-    status = bme.begin(0x76);  
-
-    if (!status) {
-        Serial.println("Cant connect");
-        while (1) delay(10);
+        digitalWrite(7,HIGH);
+        delay(60/4);
+        digitalWrite(7,LOW);
     }
 }
 
-
-void loop() {
-    Serial.begin(9600);
-    bme.begin(0x76);
-    delay(1);
-    printValues();
-
+ void gotosleep()
+ {
     // disable ADC
     ADCSRA = 0;  
     // clear various "reset" flags
@@ -76,7 +53,8 @@ void loop() {
     // allow changes, disable reset
     WDTCSR = bit (WDCE) | bit (WDE);
     // set interrupt mode and an interval 
-    WDTCSR = bit (WDIE) | bit (WDP2) | bit (WDP1);    // set WDIE, and 1 second delay
+   // WDTCSR = bit (WDIE) | bit (WDP2) | bit (WDP1);    // set WDIE, and 1 second delay
+    WDT_025s();
     wdt_reset();  // pat the dog
     
     set_sleep_mode (SLEEP_MODE_PWR_DOWN);  
@@ -87,8 +65,57 @@ void loop() {
     MCUCR = bit (BODS) | bit (BODSE);
     MCUCR = bit (BODS); 
     interrupts ();             // guarantees next instruction executed
-    sleep_cpu ();  
+    sleep_cpu ();
+ }
+
+void setup() {
+    Serial.begin(9600);
+    clock_prescale_set(clock_div_4);
+    
+    for (byte i = 0; i <= A5; i++)
+    {
+        pinMode (i, OUTPUT);    // changed as per below
+        digitalWrite (i, LOW);  //     ditto
+    }
+
+    digitalWrite(13, LOW); // LED OFF
+
+    power_adc_disable(); // ADC converter
+    power_spi_disable(); // SPI
+    //power_usart0_disable();// Serial (USART)
+    //power_timer0_disable();// Timer 0
+    power_timer1_disable();// Timer 1
+    //power_timer2_disable();// Timer 2
+    //power_twi_disable(); // TWI (I2C)
+}
+
+
+
+void loop() {
+    bme.begin(0x76);
+
+    printValues();
+    checkPress();
+
+    //delay(1);
+    digitalWrite(13, HIGH);
+    delay(20/4);
+    digitalWrite(13, LOW);
+    //delay(50/8);
+
+    power_adc_disable(); // ADC converter
+    power_spi_disable(); // SPI
+    //power_usart0_disable();// Serial (USART)
+    //power_timer0_disable();// Timer 0
+    power_timer1_disable();// Timer 1
+    power_timer2_disable();// Timer 2
+    //power_twi_disable(); // TWI (I2C)
+
+    //LowPower.idle(SLEEP_1S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF, SPI_OFF, USART0_OFF, TWI_OFF);
+    LowPower.powerDown(SLEEP_250MS, ADC_OFF, BOD_OFF);
+
+    //gotosleep();
     
     // cancel sleep as a precaution
-    sleep_disable();
+    //sleep_disable();
 }
