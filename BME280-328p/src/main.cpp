@@ -3,6 +3,10 @@
 #include <Adafruit_Sensor.h>
 #include "Adafruit_BME280.h"
 #include <avr/power.h>
+#include <avr/sleep.h>
+#include <avr/wdt.h>
+
+#include "LowPower.h"
 
 #define BME_SCK 13
 #define BME_MISO 12
@@ -10,9 +14,6 @@
 #define BME_CS 10
 
 #define SEALEVELPRESSURE_HPA (1013.25)
-
-#define adc_disable() (ADCSRA &= ~(1<<ADEN)) // disable ADC (before power-off)
-#define F_CPU 2000000
 
 Adafruit_BME280 bme; // I2C
 
@@ -24,13 +25,8 @@ void printValues() {
     Serial.println(" *C");
 
     Serial.print("Pressure = ");
-
     Serial.print(bme.readPressure() / 100.0F);
     Serial.println(" hPa");
-
-    Serial.print("Approx. Altitude = ");
-    Serial.print(bme.readAltitude(SEALEVELPRESSURE_HPA));
-    Serial.println(" m");
 
     Serial.print("Humidity = ");
     Serial.print(bme.readHumidity());
@@ -38,41 +34,61 @@ void printValues() {
 
     Serial.println();
 }
+// watchdog interrupt
+ISR (WDT_vect) 
+{
+   wdt_disable();  // disable watchdog
+}  // end of WDT_vect
+ 
 
 void setup() {
-    clock_prescale_set(clock_div_2);
-    Serial.begin(4800
-    );
+    Serial.begin(9600);
     while(!Serial);    // time to get serial running
-    Serial.println(F("BME280 test"));
+
+    for (byte i = 0; i <= A5; i++)
+    {
+        pinMode (i, OUTPUT);    // changed as per below
+        digitalWrite (i, LOW);  //     ditto
+    }
 
     unsigned status;
     
     // default settings
     status = bme.begin(0x76);  
-    // You can also pass in a Wire library object like &Wire2
-    // status = bme.begin(0x76, &Wire2)
+
     if (!status) {
-        Serial.println("Could not find a valid BME280 sensor, check wiring, address, sensor ID!");
-        Serial.print("SensorID was: 0x"); Serial.println(bme.sensorID(),16);
-        Serial.print("        ID of 0xFF probably means a bad address, a BMP 180 or BMP 085\n");
-        Serial.print("   ID of 0x56-0x58 represents a BMP 280,\n");
-        Serial.print("        ID of 0x60 represents a BME 280.\n");
-        Serial.print("        ID of 0x61 represents a BME 680.\n");
+        Serial.println("Cant connect");
         while (1) delay(10);
     }
-    
-    Serial.println("-- Default Test --");
-    delayTime = 1000;
-
-    Serial.println();
 }
 
 
-void loop() { 
+void loop() {
+    Serial.begin(9600);
+    bme.begin(0x76);
+    delay(1);
     printValues();
-    adc_disable();
-    delay(delayTime);
+
+    // disable ADC
+    ADCSRA = 0;  
+    // clear various "reset" flags
+    MCUSR = 0;     
+    // allow changes, disable reset
+    WDTCSR = bit (WDCE) | bit (WDE);
+    // set interrupt mode and an interval 
+    WDTCSR = bit (WDIE) | bit (WDP2) | bit (WDP1);    // set WDIE, and 1 second delay
+    wdt_reset();  // pat the dog
+    
+    set_sleep_mode (SLEEP_MODE_PWR_DOWN);  
+    noInterrupts ();           // timed sequence follows
+    sleep_enable();
+    
+    // turn off brown-out enable in software
+    MCUCR = bit (BODS) | bit (BODSE);
+    MCUCR = bit (BODS); 
+    interrupts ();             // guarantees next instruction executed
+    sleep_cpu ();  
+    
+    // cancel sleep as a precaution
+    sleep_disable();
 }
-
-
