@@ -112,16 +112,17 @@ bool Adafruit_BME280::init() {
   }
 
   // check if sensor, i.e. the chip ID is correct
-  _sensorID = read8(BME280_REGISTER_CHIPID);
-  if (_sensorID != 0x60)
-    return false;
+
+  //_sensorID = read8(BME280_REGISTER_CHIPID);
+  //if (_sensorID != 0x60)
+  //  return false;
 
   // reset the device using soft-reset
   // this makes sure the IIR is off, etc.
   write8(BME280_REGISTER_SOFTRESET, 0xB6);
 
   // wait for chip to wake up.
-  delay(10);
+  delay(2);
 
   // if chip is still reading calibration, delay
   while (isReadingCalibration())
@@ -131,7 +132,7 @@ bool Adafruit_BME280::init() {
 
   setSampling(); // use defaults
 
-  delay(100);
+  delay(90); //100
 
   return true;
 }
