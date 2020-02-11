@@ -2,6 +2,7 @@
 #include <SPI.h>
 #include <Adafruit_Sensor.h>
 #include "Adafruit_BME280.h"
+#include <avr/power.h>
 
 #define BME_SCK 13
 #define BME_MISO 12
@@ -10,9 +11,10 @@
 
 #define SEALEVELPRESSURE_HPA (1013.25)
 
+#define adc_disable() (ADCSRA &= ~(1<<ADEN)) // disable ADC (before power-off)
+#define F_CPU 2000000
+
 Adafruit_BME280 bme; // I2C
-//Adafruit_BME280 bme(BME_CS); // hardware SPI
-//Adafruit_BME280 bme(BME_CS, BME_MOSI, BME_MISO, BME_SCK); // software SPI
 
 unsigned long delayTime;
 
@@ -38,7 +40,9 @@ void printValues() {
 }
 
 void setup() {
-    Serial.begin(9600);
+    clock_prescale_set(clock_div_2);
+    Serial.begin(4800
+    );
     while(!Serial);    // time to get serial running
     Serial.println(F("BME280 test"));
 
@@ -67,6 +71,7 @@ void setup() {
 
 void loop() { 
     printValues();
+    adc_disable();
     delay(delayTime);
 }
 
