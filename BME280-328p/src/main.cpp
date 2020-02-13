@@ -5,7 +5,7 @@
 #include <digitalWriteFast.h>
 #include "LowPower.h"
 
-//#define TINYBME
+#define TINYBME
 
 #ifdef TINYBME
     #define TINY_BME280_I2C
@@ -40,26 +40,29 @@ void printValues() {
         press = bme.readPressure();
     #endif
 
-    Serial.println(press);
+    //Serial.println(press);
 }
 
 void checkPress()
 {
-    if(press > prev_press + 10 )
+    if(press > prev_press + 30 )
     {
         digitalWriteFast(7,HIGH);   // SPK
+        digitalWriteFast(13, HIGH);  // LED OFF
         delay(1);
         digitalWriteFast(7,LOW);    // SPK
+        digitalWriteFast(13, LOW);  // LED OFF
+
     }
 }
 
 void setup() {
-    Serial.begin(9600);
+    //Serial.begin(9600);
     #ifdef TINYBME
         bme1.setI2CAddress(0x76);
         bme1.beginI2C();
     #endif
-    //clock_prescale_set(clock_div_1);
+    clock_prescale_set(clock_div_1);
     
     for (byte i = 0; i <= A5; i++)
     {
@@ -83,15 +86,18 @@ void setup() {
 
 
 void loop() {
-    Serial.begin(9600);
-    //power_twi_enable();
-    bme.begin(0x76);
-    //bme1.beginI2C();
-    //bme1.reset();
+    //Serial.begin(9600);
+
+    #ifdef TINYBME
+        bme1.beginI2C();
+        //bme1.reset();
+    #else
+        bme.begin(0x76);
+    #endif
+
     printValues();
     checkPress();
 
     //LowPower.idle(SLEEP_1S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF, SPI_OFF, USART0_OFF, TWI_OFF);
-    //power_twi_disable(); // TWI (I2C)
-    LowPower.powerDown(SLEEP_500MS, ADC_OFF, BOD_OFF);
+    LowPower.powerDown(SLEEP_250MS, ADC_OFF, BOD_OFF);
 }
