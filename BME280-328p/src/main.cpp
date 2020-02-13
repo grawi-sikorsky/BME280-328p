@@ -45,7 +45,7 @@ void printValues() {
 
 void checkPress()
 {
-    if(press > prev_press + 30 )
+    if(press > prev_press + 60 )
     {
         digitalWriteFast(7,HIGH);   // SPK
         digitalWriteFast(13, HIGH);  // LED OFF
@@ -62,7 +62,7 @@ void setup() {
         bme1.setI2CAddress(0x76);
         bme1.beginI2C();
     #endif
-    clock_prescale_set(clock_div_1);
+    //clock_prescale_set(clock_div_2);
     
     for (byte i = 0; i <= A5; i++)
     {
@@ -99,5 +99,5 @@ void loop() {
     checkPress();
 
     //LowPower.idle(SLEEP_1S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF, SPI_OFF, USART0_OFF, TWI_OFF);
-    LowPower.powerDown(SLEEP_250MS, ADC_OFF, BOD_OFF);
+    LowPower.powerDown(SLEEP_500MS, ADC_OFF, BOD_OFF);
 }
