@@ -3,6 +3,8 @@
 #include <avr/sleep.h>
 #include <time.h>
 
+#include <VirtualWire.h>
+
 #include <digitalWriteFast.h>
 #include "LowPower.h"
 
@@ -18,12 +20,6 @@
   #define SENSE_VALUE 1
 #endif
 
-#define BME_SCK 13
-#define BME_MISO 12
-#define BME_MOSI 11
-#define BME_CS 10
-#define SEALEVELPRESSURE_HPA (1013.25)
-
 #ifdef TINYBME
   tiny::BME280 bme1; //Uses I2C address 0x76 (jumper closed)
 #else
@@ -37,9 +33,36 @@ bool was_whistled;                      // flaga dmuchniete czy nie
 #define TIME_TO_WAIT_MS 100             // czas do nastepnego wyzwolenia
 #define TIMEOUT_1       2000            // pierwszy timeiut
 #define TIMEOUT_2       6000
+#define LED_PIN         13
+#define SPEAKER_PIN     7
+
 void readValues();
 void checkTimeout();
-void wykonaj_transmisje(){};
+
+void wykonaj_transmisje()
+{
+  const int transmit_pin = 12;
+  struct package
+  {
+    float temperature = 2;
+    float humidity = 2;
+  };
+  typedef struct package Package;
+  Package data;
+
+    // Initialise the IO and ISR
+    vw_set_tx_pin(transmit_pin);
+    vw_set_ptt_inverted(true); // Required for DR3100
+    vw_setup(500);       // Bits per sec
+    pinMode(LED_PIN, OUTPUT);
+
+    digitalWrite(led_pin, HIGH); // Flash a light to show transmitting
+    vw_send((uint8_t *)&data, sizeof(data));
+    vw_wait_tx(); // Wait until the whole message is gone
+    digitalWrite(LED_PIN, LOW);
+    delay(2000);
+}
+
 
 void setup() {
   //Serial.begin(9600);
@@ -57,8 +80,8 @@ void setup() {
     pinModeFast(i, OUTPUT);    // changed as per below
     digitalWriteFast(i, HIGH);  //     ditto
   }
-  digitalWriteFast(13, LOW);  // LED OFF
-  digitalWriteFast(7,LOW);    // SPK
+  digitalWriteFast(LED_PIN, LOW);  // LED OFF
+  digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
 
   readValues();               // pierwsze pobranie wartosci - populacja zmiennych
 
@@ -90,11 +113,11 @@ void checkPressure()
 
     wykonaj_transmisje();
 
-    digitalWriteFast(7,HIGH);   // SPK
-    digitalWriteFast(13, HIGH);  // LED OFF
+    digitalWriteFast(SPEAKER_PIN, HIGH);   // SPK
+    digitalWriteFast(LED_PIN, HIGH);  // LED OFF
     delay(1);
-    digitalWriteFast(7,LOW);    // SPK
-    digitalWriteFast(13, LOW);  // LED OFF
+    digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
+    digitalWriteFast(LED_PIN, LOW);  // LED OFF
   }    
 }
 void checkTimeout()
@@ -104,17 +127,17 @@ void checkTimeout()
     // save the last time you blinked the LED
     last_positive = current_positive;
 
-    digitalWriteFast(7,HIGH);   // SPK
-    digitalWriteFast(13, HIGH);  // LED OFF
+    digitalWriteFast(SPEAKER_PIN, HIGH);   // SPK
+    digitalWriteFast(LED_PIN, HIGH);  // LED OFF
     delay(100);
-    digitalWriteFast(7,LOW);    // SPK
-    digitalWriteFast(13, LOW);  // LED OFF
+    digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
+    digitalWriteFast(LED_PIN, LOW);  // LED OFF
     delay(100);
-    digitalWriteFast(7,HIGH);   // SPK
-    digitalWriteFast(13, HIGH);  // LED OFF
+    digitalWriteFast(SPEAKER_PIN, HIGH);   // SPK
+    digitalWriteFast(LED_PIN, HIGH);  // LED OFF
     delay(100);
-    digitalWriteFast(7,LOW);    // SPK
-    digitalWriteFast(13, LOW);  // LED OFF
+    digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
+    digitalWriteFast(LED_PIN, LOW);  // LED OFF
 
     was_whistled = false;
   }
@@ -147,27 +170,27 @@ void loop() {
   else                            // jeżeli poprzednio było dmuchnięcie
   {
     current_positive = millis();  // pobierz czas.
-      digitalWriteFast(7,HIGH);   // SPK
-      digitalWriteFast(13, HIGH);  // LED OFF
+      digitalWriteFast(SPEAKER_PIN, HIGH);   // SPK
+      digitalWriteFast(LED_PIN, HIGH);  // LED OFF
       delay(1);
-      digitalWriteFast(7,LOW);    // SPK
-      digitalWriteFast(13, LOW);  // LED OFF
+      digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
+      digitalWriteFast(LED_PIN, LOW);  // LED OFF
     if(current_positive - last_positive > TIME_TO_WAIT_MS) 
     {
       // save the last time you blinked the LED
       last_positive = current_positive;
 
-      digitalWriteFast(7,HIGH);   // SPK
-      digitalWriteFast(13, HIGH);  // LED OFF
+      digitalWriteFast(SPEAKER_PIN, HIGH);   // SPK
+      digitalWriteFast(LED_PIN, HIGH);  // LED OFF
       delay(100);
-      digitalWriteFast(7,LOW);    // SPK
-      digitalWriteFast(13, LOW);  // LED OFF
+      digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
+      digitalWriteFast(LED_PIN, LOW);  // LED OFF
       delay(100);
-      digitalWriteFast(7,HIGH);   // SPK
-      digitalWriteFast(13, HIGH);  // LED OFF
+      digitalWriteFast(SPEAKER_PIN, HIGH);   // SPK
+      digitalWriteFast(LED_PIN, HIGH);  // LED OFF
       delay(100);
-      digitalWriteFast(7,LOW);    // SPK
-      digitalWriteFast(13, LOW);  // LED OFF
+      digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
+      digitalWriteFast(LED_PIN, LOW);  // LED OFF
 
       was_whistled = false;
     }
