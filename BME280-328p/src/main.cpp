@@ -35,13 +35,13 @@ bool was_whistled;                      // flaga dmuchniete czy nie
 #define TIMEOUT_2       6000
 #define LED_PIN         13
 #define SPEAKER_PIN     7
+#define TRANSMISION_PIN 3
 
 void readValues();
 void checkTimeout();
 
 void wykonaj_transmisje()
 {
-  const int transmit_pin = 12;
   struct package
   {
     float temperature = 2;
@@ -51,12 +51,11 @@ void wykonaj_transmisje()
   Package data;
 
     // Initialise the IO and ISR
-    vw_set_tx_pin(transmit_pin);
+    vw_set_tx_pin(TRANSMISION_PIN);
     vw_set_ptt_inverted(true); // Required for DR3100
     vw_setup(500);       // Bits per sec
-    pinMode(LED_PIN, OUTPUT);
 
-    digitalWrite(led_pin, HIGH); // Flash a light to show transmitting
+    digitalWrite(LED_PIN, HIGH); // Flash a light to show transmitting
     vw_send((uint8_t *)&data, sizeof(data));
     vw_wait_tx(); // Wait until the whole message is gone
     digitalWrite(LED_PIN, LOW);
