@@ -11,7 +11,7 @@
 #ifdef TINYBME
   #define TINY_BME280_I2C
   #include "TinyBME280.h"
-  #define SENSE_VALUE 60
+  #define SENSE_VALUE 30
 #else
   #include <Adafruit_Sensor.h>
   #include "Adafruit_BME280.h"
@@ -34,12 +34,12 @@ float press, prev_press;
 time_t current_positive, last_positive, // czas ostatniego dmuchniecia
           a;
 bool was_whistled;                      // flaga dmuchniete czy nie
-#define TIME_TO_WAIT_MS 200             // czas do nastepnego wyzwolenia
+#define TIME_TO_WAIT_MS 100             // czas do nastepnego wyzwolenia
 #define TIMEOUT_1       2000            // pierwszy timeiut
 #define TIMEOUT_2       6000
 void readValues();
 void checkTimeout();
-void wykonaj_transmisje();
+void wykonaj_transmisje(){};
 
 void setup() {
   //Serial.begin(9600);
@@ -175,5 +175,5 @@ void loop() {
 
 
   //LowPower.idle(SLEEP_1S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF, SPI_OFF, USART0_OFF, TWI_OFF);
-  LowPower.powerDown(SLEEP_500MS, ADC_OFF, BOD_OFF);
+  LowPower.powerDown(SLEEP_250MS, ADC_OFF, BOD_OFF);
 }
