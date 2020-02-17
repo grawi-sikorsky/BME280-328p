@@ -3,12 +3,18 @@
 #include <avr/sleep.h>
 #include <time.h>
 
-#include <VirtualWire.h>
-
 #include <digitalWriteFast.h>
 #include "LowPower.h"
 
 #define TINYBME
+//#define VWRF
+
+#ifdef VWRF
+  #include <VirtualWire.h>
+#else
+  #include <RH_ASK.h>
+  #include <SPI.h> // Not actually used but needed to compile
+#endif
 
 #ifdef TINYBME
   #define TINY_BME280_I2C
@@ -35,31 +41,46 @@ bool was_whistled;                      // flaga dmuchniete czy nie
 #define TIMEOUT_2       6000
 #define LED_PIN         13
 #define SPEAKER_PIN     7
-#define TRANSMISION_PIN 3
+#define TRANSMISION_PIN 4
+
+RH_ASK rfsender;
 
 void readValues();
 void checkTimeout();
 
 void wykonaj_transmisje()
 {
-  struct package
-  {
-    float temperature = 2;
-    float humidity = 2;
-  };
-  typedef struct package Package;
-  Package data;
+  uint8_t temperature = 10;
 
+  #ifdef VWRF
+    digitalWrite(LED_PIN, HIGH); // Flash a light to show transmitting
+    vw_send((uint8_t *)&temperature, sizeof(temperature));
+    vw_wait_tx(); // Wait until the whole message is gone
+    digitalWrite(LED_PIN, LOW);
+    delay(500);
+  #else
+    power_timer1_enable();
+    digitalWriteFast(LED_PIN, HIGH); // Flash a light to show transmitting
+    
+    rfsender.send((uint8_t *)temperature, sizeof(temperature));
+    rfsender.waitPacketSent();
+
+    digitalWriteFast(LED_PIN, LOW);
+    power_timer1_disable();
+    delay(20);
+  #endif
+}
+
+void setup_rf()
+{
+  #ifdef VWRF
     // Initialise the IO and ISR
     vw_set_tx_pin(TRANSMISION_PIN);
     vw_set_ptt_inverted(true); // Required for DR3100
-    vw_setup(500);       // Bits per sec
-
-    digitalWrite(LED_PIN, HIGH); // Flash a light to show transmitting
-    vw_send((uint8_t *)&data, sizeof(data));
-    vw_wait_tx(); // Wait until the whole message is gone
-    digitalWrite(LED_PIN, LOW);
-    delay(2000);
+    vw_setup(2000);       // Bits per sec
+  #else
+    if (!rfsender.init()){} //
+  #endif
 }
 
 
@@ -81,8 +102,10 @@ void setup() {
   }
   digitalWriteFast(LED_PIN, LOW);  // LED OFF
   digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
+  digitalWriteFast(TRANSMISION_PIN, LOW);    // RF433
 
   readValues();               // pierwsze pobranie wartosci - populacja zmiennych
+  setup_rf();
 
   power_adc_disable(); // ADC converter
   power_spi_disable(); // SPI
@@ -90,9 +113,7 @@ void setup() {
   //power_timer0_disable();// Timer 0
   power_timer1_disable();// Timer 1
   power_timer2_disable();// Timer 2
-  //power_twi_disable(); // TWI (I2C)
 }
-
 
 void readValues() {
   prev_press = press;
@@ -113,31 +134,16 @@ void checkPressure()
     wykonaj_transmisje();
 
     digitalWriteFast(SPEAKER_PIN, HIGH);   // SPK
-    digitalWriteFast(LED_PIN, HIGH);  // LED OFF
-    delay(1);
+    delayMicroseconds(100);
     digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
-    digitalWriteFast(LED_PIN, LOW);  // LED OFF
-  }    
+  }
 }
 void checkTimeout()
 {
   if(current_positive - last_positive > TIME_TO_WAIT_MS) 
   {
-    // save the last time you blinked the LED
+    // odswiez last positive
     last_positive = current_positive;
-
-    digitalWriteFast(SPEAKER_PIN, HIGH);   // SPK
-    digitalWriteFast(LED_PIN, HIGH);  // LED OFF
-    delay(100);
-    digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
-    digitalWriteFast(LED_PIN, LOW);  // LED OFF
-    delay(100);
-    digitalWriteFast(SPEAKER_PIN, HIGH);   // SPK
-    digitalWriteFast(LED_PIN, HIGH);  // LED OFF
-    delay(100);
-    digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
-    digitalWriteFast(LED_PIN, LOW);  // LED OFF
-
     was_whistled = false;
   }
   else if(current_positive - last_positive > TIMEOUT_1 )
@@ -151,6 +157,11 @@ void checkTimeout()
 }
 // Brown-out disable // ->  avrdude -c usbtiny -p m328p -U efuse:w:0x07:m
 
+
+
+/**************************
+ *  LOOP
+ * ************************/
 void loop() {
   //Serial.begin(9600);
 
@@ -169,26 +180,18 @@ void loop() {
   else                            // jeżeli poprzednio było dmuchnięcie
   {
     current_positive = millis();  // pobierz czas.
-      digitalWriteFast(SPEAKER_PIN, HIGH);   // SPK
       digitalWriteFast(LED_PIN, HIGH);  // LED OFF
-      delay(1);
-      digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
+      delayMicroseconds(100);
       digitalWriteFast(LED_PIN, LOW);  // LED OFF
     if(current_positive - last_positive > TIME_TO_WAIT_MS) 
     {
       // save the last time you blinked the LED
       last_positive = current_positive;
 
-      digitalWriteFast(SPEAKER_PIN, HIGH);   // SPK
+      //digitalWriteFast(SPEAKER_PIN, HIGH);   // SPK
       digitalWriteFast(LED_PIN, HIGH);  // LED OFF
-      delay(100);
-      digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
-      digitalWriteFast(LED_PIN, LOW);  // LED OFF
-      delay(100);
-      digitalWriteFast(SPEAKER_PIN, HIGH);   // SPK
-      digitalWriteFast(LED_PIN, HIGH);  // LED OFF
-      delay(100);
-      digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
+      delayMicroseconds(100);
+      //digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
       digitalWriteFast(LED_PIN, LOW);  // LED OFF
 
       was_whistled = false;
@@ -196,6 +199,5 @@ void loop() {
   }
 
 
-  //LowPower.idle(SLEEP_1S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF, SPI_OFF, USART0_OFF, TWI_OFF);
   LowPower.powerDown(SLEEP_250MS, ADC_OFF, BOD_OFF);
 }
