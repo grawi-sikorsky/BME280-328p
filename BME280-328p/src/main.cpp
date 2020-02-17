@@ -167,6 +167,7 @@ void checkTimeout()
     power_twi_disable();
     power_usart0_disable();
     power_all_disable();
+    //wdt_disable();
 
 
     for (int i = 0; i < A5; i++) {
@@ -224,3 +225,10 @@ void loop() {
   checkTimeout(); // przy poprzednim dmuchnieciu funkcja ruszy 2 razy.. do zrobienia.
   LowPower.powerDown(sleeptime, ADC_OFF, BOD_OFF);
 }
+void digitalInterrupt(){
+  //needed for the digital input interrupt
+}
+
+ISR(WDT_vect){
+  //DON'T FORGET THIS!  Needed for the watch dog timer.  This is called after a watch dog timer timeout - this is the interrupt function called after waking up
+}// watchdog interrupt
