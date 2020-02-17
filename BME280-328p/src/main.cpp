@@ -153,10 +153,6 @@ void checkTimeout()
     digitalWriteFast(SPEAKER_PIN,HIGH);
     delay(20);
     digitalWriteFast(SPEAKER_PIN,LOW);
-    delay(20);
-    digitalWriteFast(SPEAKER_PIN,HIGH);
-    delay(20);
-    digitalWriteFast(SPEAKER_PIN,LOW);
   } 
   else if(current_timeout > TIMEOUT_2 )
   {
@@ -164,20 +160,7 @@ void checkTimeout()
     digitalWriteFast(SPEAKER_PIN,HIGH);
     delay(20);
     digitalWriteFast(SPEAKER_PIN,LOW);
-    delay(20);
-    digitalWriteFast(SPEAKER_PIN,HIGH);
-    delay(20);
-    digitalWriteFast(SPEAKER_PIN,LOW);    
-    delay(20);
-    digitalWriteFast(SPEAKER_PIN,HIGH);
-    delay(20);
-    digitalWriteFast(SPEAKER_PIN,LOW);
-  }
-  else
-  {
-    /* code */
-  }
-  
+  }  
 }
 
 /**************************
