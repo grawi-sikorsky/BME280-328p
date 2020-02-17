@@ -24,11 +24,13 @@ tiny::BME280 bme1; //Uses I2C address 0x76 (jumper closed)
 
 float press, prev_press;
 time_t current_positive, last_positive, // czas ostatniego dmuchniecia
-          a;
+          current_timeout;
 bool was_whistled;                      // flaga dmuchniete czy nie
+period_t sleeptime = SLEEP_250MS;       // czas snu procesora
+                                        // 4 - 250ms / 6 - 1s / 8 - 4s..
 #define TIME_TO_WAIT_MS 100             // czas do nastepnego wyzwolenia
 #define TIMEOUT_1       2000            // pierwszy timeiut
-#define TIMEOUT_2       6000
+#define TIMEOUT_2       4000
 #define LED_PIN         13
 #define SPEAKER_PIN     7
 #define TRANSMISION_PIN 4
@@ -131,23 +133,52 @@ void checkPressure(){
  * ***************************************************/
 void checkTimeout()
 {
-  if(current_positive - last_positive > TIME_TO_WAIT_MS) 
-  {
-    // odswiez last positive
-    last_positive = current_positive;
-    was_whistled = false;
+  current_positive = millis();  // pobierz czas.
+  current_timeout = current_positive - last_positive;
+
+  if(current_timeout > TIME_TO_WAIT_MS && current_timeout < TIMEOUT_1) // pierwszy prog
+  { // jezeli 
+    //last_positive = current_positive;
+    sleeptime = SLEEP_250MS;
+
+    digitalWriteFast(SPEAKER_PIN,HIGH);
+    delay(20);
+    digitalWriteFast(SPEAKER_PIN,LOW);
   }
-  else if(current_positive - last_positive > TIMEOUT_1 )
+  else if(current_timeout > TIMEOUT_1 && current_timeout < TIMEOUT_2) // drugi prog
   {
     // zmniejsz probkowanie 1x/s
-    //LowPower.powerDown(SLEEP_1S, ADC_OFF, BOD_OFF);
-  } 
-  else if(current_positive - last_positive > TIMEOUT_2 )
-  {
-    // przejsc w deep sleep
-  }
-}
+    sleeptime = SLEEP_1S; // 1S
 
+    digitalWriteFast(SPEAKER_PIN,HIGH);
+    delay(20);
+    digitalWriteFast(SPEAKER_PIN,LOW);
+    delay(20);
+    digitalWriteFast(SPEAKER_PIN,HIGH);
+    delay(20);
+    digitalWriteFast(SPEAKER_PIN,LOW);
+  } 
+  else if(current_timeout > TIMEOUT_2 )
+  {
+    sleeptime = SLEEP_4S; // 4S
+    digitalWriteFast(SPEAKER_PIN,HIGH);
+    delay(20);
+    digitalWriteFast(SPEAKER_PIN,LOW);
+    delay(20);
+    digitalWriteFast(SPEAKER_PIN,HIGH);
+    delay(20);
+    digitalWriteFast(SPEAKER_PIN,LOW);    
+    delay(20);
+    digitalWriteFast(SPEAKER_PIN,HIGH);
+    delay(20);
+    digitalWriteFast(SPEAKER_PIN,LOW);
+  }
+  else
+  {
+    /* code */
+  }
+  
+}
 
 /**************************
  *  LOOP
@@ -168,22 +199,17 @@ void loop() {
     digitalWriteFast(I2C_SDA_PIN, LOW);
     ADCSRA &= ~(1 << 7);
   }
-  else                      // jeżeli poprzednio było dmuchnięcie
-  {                         // TIME_TO_WAIT_MS okresla czas przerwy
+  else if(was_whistled == true) // jeżeli poprzednio było dmuchnięcie
+  {                             // TIME_TO_WAIT_MS okresla czas przerwy
     power_twi_disable();
-    
-    current_positive = millis();  // pobierz czas.
-
     if(current_positive - last_positive > TIME_TO_WAIT_MS) 
     {
-      // save the last time you blinked the LED
       last_positive = current_positive;
       was_whistled = false;
     }
     power_timer1_disable();
   }
 
-  checkTimeout();
-
-  LowPower.powerDown(SLEEP_250MS, ADC_OFF, BOD_OFF);
+  checkTimeout(); // przy poprzednim dmuchnieciu funkcja ruszy 2 razy.. do zrobienia.
+  LowPower.powerDown(sleeptime, ADC_OFF, BOD_OFF);
 }
