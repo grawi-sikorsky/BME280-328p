@@ -29,8 +29,8 @@ bool was_whistled;                      // flaga dmuchniete czy nie
 period_t sleeptime = SLEEP_250MS;       // czas snu procesora
                                         // 4 - 250ms / 6 - 1s / 8 - 4s..
 #define TIME_TO_WAIT_MS 100             // czas do nastepnego wyzwolenia
-#define TIMEOUT_1       2000            // pierwszy timeiut
-#define TIMEOUT_2       4000
+#define TIMEOUT_1       1000            // pierwszy timeiut
+#define TIMEOUT_2       2000
 #define LED_PIN         13
 #define SPEAKER_PIN     7
 #define TRANSMISION_PIN 4
@@ -155,11 +155,39 @@ void checkTimeout()
     digitalWriteFast(SPEAKER_PIN,LOW);
   } 
   else if(current_timeout > TIMEOUT_2 )
-  {
-    sleeptime = SLEEP_4S; // 4S
+  { 
     digitalWriteFast(SPEAKER_PIN,HIGH);
     delay(20);
     digitalWriteFast(SPEAKER_PIN,LOW);
+
+    //sleeptime = SLEEP_4S; // 4S
+    sleeptime = SLEEP_FOREVER;
+    // setup ISR to WAKE UP!
+    __power_all_disable();
+    power_twi_disable();
+    power_usart0_disable();
+    power_all_disable();
+
+
+    for (int i = 0; i < A5; i++) {
+    if(i != 2)//just because the button is hooked up to digital pin 2
+    pinMode(i, OUTPUT);
+    }
+    //attachInterrupt(0, digitalInterrupt, FALLING); //interrupt for waking up
+      //SETUP WATCHDOG TIMER
+    WDTCSR = (24);//change enable and WDE - also resets
+    WDTCSR = (33);//prescalers only - get rid of the WDE and WDCE bit
+    WDTCSR |= (1<<6);//enable interrupt mode
+
+    //Disable ADC - don't forget to flip back after waking up if using ADC in your application ADCSRA |= (1 << 7);
+    ADCSRA &= ~(1 << 7);
+    
+    //ENABLE SLEEP - this enables the sleep mode
+    SMCR |= (1 << 2); //power down mode
+    SMCR |= 1;//enable sleep
+    //BOD DISABLE - this must be called right before the __asm__ sleep instruction
+    MCUCR |= (3 << 5); //set both BODS and BODSE at the same time
+    MCUCR = (MCUCR & ~(1 << 5)) | (1 << 6); //then set the BODS bit and clear the BODSE bit at the same time
   }  
 }
 
