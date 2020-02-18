@@ -6,6 +6,7 @@
 #include <digitalWriteFast.h>
 #include "LowPower.h"
 
+
 //#define VWRF
 
 #ifdef VWRF
@@ -39,7 +40,6 @@ RH_ASK rfsender(2000,12,11,3,true);
 
 void readValues();
 void checkTimeout();
-
 
 void wykonaj_transmisje()
 {
@@ -96,11 +96,13 @@ void setup() {
   for (byte i = 0; i <= A5; i++)
   {
     pinModeFast(i, OUTPUT);    // changed as per below
-    digitalWriteFast(i, LOW);  //     ditto
+    digitalWriteFast(i, HIGH);  //     ditto
   }
   digitalWriteFast(LED_PIN, LOW);  // LED OFF
   digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
   digitalWriteFast(TRANSMISION_PIN, LOW);    // RF433
+  digitalWriteFast(I2C_SCL_PIN,LOW);
+  digitalWriteFast(I2C_SDA_PIN,LOW);
 
   readValues();               // pierwsze pobranie wartosci - populacja zmiennych
   setup_rf();
@@ -115,7 +117,9 @@ void readValues() {
   power_twi_enable();
   press = bme1.readFixedPressure();
   power_twi_disable();
+
 }
+// Brown-out disable // ->  avrdude -c usbasp -p m328p -U efuse:w:0x07:m
 
 /*****************************************************
  * Sprawdza czy cisnienie jest wieksze od zalozonego
@@ -160,15 +164,14 @@ void checkTimeout()
     delay(20);
     digitalWriteFast(SPEAKER_PIN,LOW);
 
-    //sleeptime = SLEEP_4S; // 4S
-    sleeptime = SLEEP_FOREVER;
+    sleeptime = SLEEP_4S; // 4S
+    //sleeptime = SLEEP_FOREVER;
     // setup ISR to WAKE UP!
-    __power_all_disable();
     power_twi_disable();
     power_usart0_disable();
     power_all_disable();
+/*
     //wdt_disable();
-
 
     for (int i = 0; i < A5; i++) {
     if(i != 2)//just because the button is hooked up to digital pin 2
@@ -189,6 +192,8 @@ void checkTimeout()
     //BOD DISABLE - this must be called right before the __asm__ sleep instruction
     MCUCR |= (3 << 5); //set both BODS and BODSE at the same time
     MCUCR = (MCUCR & ~(1 << 5)) | (1 << 6); //then set the BODS bit and clear the BODSE bit at the same time
+
+*/
   }  
 }
 
@@ -204,11 +209,12 @@ void loop() {
       bme1.beginI2C();
       readValues();
       checkPressure();
+
+    pinModeFast(I2C_SCL_PIN,INPUT_PULLUP);
+    pinModeFast(I2C_SDA_PIN,INPUT_PULLUP);
     power_twi_disable();
     power_timer1_disable();
 
-    digitalWriteFast(I2C_SCL_PIN, LOW);
-    digitalWriteFast(I2C_SDA_PIN, LOW);
     ADCSRA &= ~(1 << 7);
   }
   else if(was_whistled == true) // jeżeli poprzednio było dmuchnięcie
@@ -223,12 +229,20 @@ void loop() {
   }
 
   checkTimeout(); // przy poprzednim dmuchnieciu funkcja ruszy 2 razy.. do zrobienia.
+  Wire.end();
+  bme1.end();
+
+  pinModeFast(I2C_SCL_PIN,OUTPUT);
+  pinModeFast(I2C_SDA_PIN,OUTPUT);
+  digitalWriteFast(A5,LOW); // SCL
+  digitalWriteFast(A4,LOW); // SDA
+  //pinModeFast(I2C_SCL_PIN,INPUT_PULLUP);
+  //pinModeFast(I2C_SDA_PIN,INPUT_PULLUP);
+  pinModeFast(I2C_SCL_PIN,INPUT_PULLUP);
+  pinModeFast(I2C_SDA_PIN,INPUT_PULLUP);
+
   LowPower.powerDown(sleeptime, ADC_OFF, BOD_OFF);
 }
 void digitalInterrupt(){
   //needed for the digital input interrupt
 }
-
-ISR(WDT_vect){
-  //DON'T FORGET THIS!  Needed for the watch dog timer.  This is called after a watch dog timer timeout - this is the interrupt function called after waking up
-}// watchdog interrupt
