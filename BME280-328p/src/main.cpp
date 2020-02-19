@@ -16,7 +16,8 @@
   #include <SPI.h> // Not actually used but needed to compile
 #endif
 
-#define TINY_BME280_I2C
+//#define TINY_BME280_I2C
+#define TINY_BME280_SPI
 #include "TinyBME280.h"
 #define SENSE_VALUE 30
 
@@ -30,8 +31,8 @@ bool was_whistled;                      // flaga dmuchniete czy nie
 period_t sleeptime = SLEEP_250MS;       // czas snu procesora
                                         // 4 - 250ms / 6 - 1s / 8 - 4s..
 #define TIME_TO_WAIT_MS 100             // czas do nastepnego wyzwolenia
-#define TIMEOUT_1       1000            // pierwszy timeiut
-#define TIMEOUT_2       2000
+#define TIMEOUT_1       4000            // pierwszy timeiut
+#define TIMEOUT_2       8000
 #define LED_PIN         13
 #define SPEAKER_PIN     7
 #define TRANSMISION_PIN 4
@@ -60,7 +61,6 @@ void wykonaj_transmisje()
 
     //digitalWriteFast(LED_PIN, LOW);
     power_timer1_disable();
-    delay(2);
   #endif
 }
 
@@ -80,29 +80,33 @@ void setup_rf()
  * SETUP
  * ***************************************************/
 void setup() {
-  //clock_prescale_set(clock_div_2);
+  //clock_prescale_set(clock_div_4);
 
   ADCSRA &= ~(1 << 7); // TURN OFF ADC CONVERTER
   power_adc_disable(); // ADC converter
-  power_spi_disable(); // SPI
+  //power_spi_disable(); // SPI
   power_usart0_disable();// Serial (USART)
   //power_timer0_disable();// TIMER 0 SLEEP WDT ...
   //power_timer1_disable();// Timer 1 - I2C...
-  power_timer2_disable();// Timer 2
+  //power_timer2_disable();// Timer 2
   
-  bme1.setI2CAddress(0x76);
-  bme1.beginI2C();
+  //bme1.setI2CAddress(0x76);
+  //bme1.beginI2C();
+
+  bme1.begin();
 
   for (byte i = 0; i <= A5; i++)
   {
     pinModeFast(i, OUTPUT);    // changed as per below
-    digitalWriteFast(i, HIGH);  //     ditto
+    digitalWriteFast(i, LOW);  //     ditto
   }
+  digitalWriteFast(0, HIGH);
+  digitalWriteFast(1, HIGH);
   digitalWriteFast(LED_PIN, LOW);  // LED OFF
   digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
   digitalWriteFast(TRANSMISION_PIN, LOW);    // RF433
-  digitalWriteFast(I2C_SCL_PIN,LOW);
-  digitalWriteFast(I2C_SDA_PIN,LOW);
+  //digitalWriteFast(I2C_SCL_PIN,LOW);
+  //digitalWriteFast(I2C_SDA_PIN,LOW);
 
   readValues();               // pierwsze pobranie wartosci - populacja zmiennych
   setup_rf();
@@ -114,9 +118,9 @@ void setup() {
 void readValues() {
   prev_press = press;
 
-  power_twi_enable();
+  //power_twi_enable();
   press = bme1.readFixedPressure();
-  power_twi_disable();
+  //power_twi_disable();
 
 }
 // Brown-out disable // ->  avrdude -c usbasp -p m328p -U efuse:w:0x07:m
@@ -145,31 +149,30 @@ void checkTimeout()
     //last_positive = current_positive;
     sleeptime = SLEEP_250MS;
 
-    digitalWriteFast(SPEAKER_PIN,HIGH);
-    delay(20);
-    digitalWriteFast(SPEAKER_PIN,LOW);
+    //digitalWriteFast(SPEAKER_PIN,HIGH);
+    //delay(20);
+    //digitalWriteFast(SPEAKER_PIN,LOW);
   }
   else if(current_timeout > TIMEOUT_1 && current_timeout < TIMEOUT_2) // drugi prog
   {
     // zmniejsz probkowanie 1x/s
     sleeptime = SLEEP_1S; // 1S
 
-    digitalWriteFast(SPEAKER_PIN,HIGH);
-    delay(20);
-    digitalWriteFast(SPEAKER_PIN,LOW);
+    //digitalWriteFast(SPEAKER_PIN,HIGH);
+    //delay(20);
+    //digitalWriteFast(SPEAKER_PIN,LOW);
   } 
   else if(current_timeout > TIMEOUT_2 )
   { 
-    digitalWriteFast(SPEAKER_PIN,HIGH);
-    delay(20);
-    digitalWriteFast(SPEAKER_PIN,LOW);
+    //digitalWriteFast(SPEAKER_PIN,HIGH);
+    //delay(20);
+    //digitalWriteFast(SPEAKER_PIN,LOW);
 
     sleeptime = SLEEP_4S; // 4S
     //sleeptime = SLEEP_FOREVER;
     // setup ISR to WAKE UP!
     power_twi_disable();
     power_usart0_disable();
-    power_all_disable();
 /*
     //wdt_disable();
 
@@ -205,21 +208,19 @@ void loop() {
   if(was_whistled == false)  // jeżeli poprzednio nie było dmuchnięcia
   {
     power_timer1_enable();
-    power_twi_enable();
-      bme1.beginI2C();
+    //power_twi_enable();
+      //bme1.beginI2C();
+      bme1.begin();
       readValues();
       checkPressure();
-
-    pinModeFast(I2C_SCL_PIN,INPUT_PULLUP);
-    pinModeFast(I2C_SDA_PIN,INPUT_PULLUP);
-    power_twi_disable();
+    //power_twi_disable();
     power_timer1_disable();
 
     ADCSRA &= ~(1 << 7);
   }
   else if(was_whistled == true) // jeżeli poprzednio było dmuchnięcie
   {                             // TIME_TO_WAIT_MS okresla czas przerwy
-    power_twi_disable();
+    //power_twi_disable();
     if(current_positive - last_positive > TIME_TO_WAIT_MS) 
     {
       last_positive = current_positive;
@@ -229,20 +230,18 @@ void loop() {
   }
 
   checkTimeout(); // przy poprzednim dmuchnieciu funkcja ruszy 2 razy.. do zrobienia.
-  Wire.end();
-  bme1.end();
+  //Wire.end();
+  //bme1.end();
 
-  pinModeFast(I2C_SCL_PIN,OUTPUT);
-  pinModeFast(I2C_SDA_PIN,OUTPUT);
-  digitalWriteFast(A5,LOW); // SCL
-  digitalWriteFast(A4,LOW); // SDA
+  //pinModeFast(I2C_SCL_PIN,OUTPUT);
+  //pinModeFast(I2C_SDA_PIN,OUTPUT);
+  //digitalWriteFast(A5,LOW); // SCL
+  //digitalWriteFast(A4,LOW); // SDA
   //pinModeFast(I2C_SCL_PIN,INPUT_PULLUP);
   //pinModeFast(I2C_SDA_PIN,INPUT_PULLUP);
-  pinModeFast(I2C_SCL_PIN,INPUT_PULLUP);
-  pinModeFast(I2C_SDA_PIN,INPUT_PULLUP);
+  //pinModeFast(I2C_SCL_PIN,INPUT_PULLUP);
+  //pinModeFast(I2C_SDA_PIN,INPUT_PULLUP);
+  //delay(2000);
 
   LowPower.powerDown(sleeptime, ADC_OFF, BOD_OFF);
-}
-void digitalInterrupt(){
-  //needed for the digital input interrupt
 }
