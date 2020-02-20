@@ -132,12 +132,13 @@ void setup() {
 void readValues() {
   prev_press = press;
 
-  //power_spi_enable();
-  //bme1.begin();
+  power_spi_enable();
+
   bme1.setMode(11);
   press = bme1.readFixedPressure();
   bme1.setMode(00);
-  //power_spi_disable();
+
+  power_spi_disable();
 }
 // Brown-out disable // ->  avrdude -c usbasp -p m328p -U efuse:w:0x07:m
 
@@ -264,17 +265,7 @@ void loop() {
   }
 
   checkTimeout(); // przy poprzednim dmuchnieciu funkcja ruszy 2 razy.. do zrobienia.
-  //Wire.end();
-  //bme1.end();
 
-  //pinModeFast(I2C_SCL_PIN,OUTPUT);
-  //pinModeFast(I2C_SDA_PIN,OUTPUT);
-  //digitalWriteFast(A5,LOW); // SCL
-  //digitalWriteFast(A4,LOW); // SDA
-  //pinModeFast(I2C_SCL_PIN,INPUT_PULLUP);
-  //pinModeFast(I2C_SDA_PIN,INPUT_PULLUP);
-  //pinModeFast(I2C_SCL_PIN,INPUT_PULLUP);
-  //pinModeFast(I2C_SDA_PIN,INPUT_PULLUP);
   //delay(2000);
 
   LowPower.powerDown(sleeptime, ADC_OFF, BOD_OFF);
