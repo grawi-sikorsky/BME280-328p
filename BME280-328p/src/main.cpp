@@ -14,6 +14,7 @@
 #else
   #include <RH_ASK.h>
   #include <SPI.h> // Not actually used but needed to compile
+  #include <HopeDuino_CMT211xA.h> 
 #endif
 
 //#define TINY_BME280_I2C
@@ -36,16 +37,115 @@ period_t sleeptime = SLEEP_250MS;       // czas snu procesora
 #define TIMEOUT_2       3000
 #define LED_PIN         13
 #define SPEAKER_PIN     7 //A2 // 7 minipro
-#define TRANSMISION_PIN 4
+#define TRANSMISION_PIN 0 // 4 w proto
 
-RH_ASK rfsender(2000,5,TRANSMISION_PIN,3,true);
+RH_ASK rfsender(2000,4,TRANSMISION_PIN,3,true);
+cmt211xaClass radio;
+byte str[7] = {'C', 'M', 'O', 'S', 'T', 'E', 'K'};
 
 void readValues();
 void checkTimeout();
 
+//Nadawanie 
+u8 TxTbl[40];
+volatile u8 BitCnt = 0;
+volatile u8 BitNr = 0;
+volatile u8 HalfBit = 0;
+volatile u8 Tx_state;
+volatile u8 TxRepeatCnt = 0;
+
+u8 Prefix = 0xA5;
+//at 0x8400 const code 
+u8 TblAdr[2] = {0, 0};
+u8 AdrMsb;
+u8 AdrLsb;
+u8 Cmd = 0xA1;	
+u8 Checksum = 0;
+
+//u8 UID0;
+//u16 *ptr;
+
+void transmisjaCMT2110()
+{
+	u8 i;
+	u8 idx = 0;
+
+	i=0;
+	while(i < 8)
+		{
+			if((Prefix & (0x80 >> i)) == (0x80 >> i))
+				TxTbl[idx] = 1;
+			else
+				TxTbl[idx] = 0;
+		i++;
+		idx++;	
+		}
+
+	i=0;
+	while(i < 8)
+		{
+			if((AdrMsb & (0x80 >> i)) == (0x80 >> i))
+				TxTbl[idx] = 1;
+			else
+				TxTbl[idx] = 0;
+		i++;
+		idx++;	
+		}
+		
+	i=0;
+	while(i < 8)
+		{
+			if((AdrLsb & (0x80 >> i)) == (0x80 >> i))
+				TxTbl[idx] = 1;
+			else
+				TxTbl[idx] = 0;
+		i++;
+		idx++;	
+		}	
+		
+	i=0;
+	while(i < 8)
+		{
+			if((Cmd & (0x80 >> i)) == (0x80 >> i))
+				TxTbl[idx] = 1;
+			else
+				TxTbl[idx] = 0;
+		i++;
+		idx++;	
+		}	
+		
+	i=0;
+	while(i < 8)
+		{
+			if((Checksum & (0x80 >> i)) == (0x80 >> i))
+				TxTbl[idx] = 1;
+			else
+				TxTbl[idx] = 0;
+		i++;
+		idx++;	
+		}
+
+  digitalWriteFast(TRANSMISION_PIN,HIGH); // wybudzenie CMT2110
+  delayMicroseconds(100); // 
+  digitalWriteFast(TRANSMISION_PIN,LOW); // wybudzenie CMT2110
+  delay(5);
+
+  for(i=0;i<40;i++)
+  {
+    if(TxTbl[0] == 0){
+      digitalWriteFast(TRANSMISION_PIN,LOW);
+    }
+    else{
+      digitalWriteFast(TRANSMISION_PIN,HIGH);
+    }
+    delayMicroseconds(20);
+  }
+  digitalWriteFast(TRANSMISION_PIN,LOW);
+}
+
 void wykonaj_transmisje()
 {
-  const char *msg = "JEB";
+  const char *msg = "1010 0101 0000 0000 0000 0000 1010 0001 0000 0000";
  
   #ifdef VWRF
     digitalWrite(LED_PIN, HIGH); // Flash a light to show transmitting
@@ -73,7 +173,7 @@ void setup_rf()
     vw_set_ptt_inverted(true); // Required for DR3100
     vw_setup(2000);       // Bits per sec
   #else
-    if (!rfsender.init()){} //
+    if (!rfsender.init()){} //    
   #endif
 }
 
@@ -81,7 +181,7 @@ void setup_rf()
  * SETUP
  * ***************************************************/
 void setup() {
-  //clock_prescale_set(clock_div_4);
+  //clock_prescale_set(clock_div_8);
 
   ADCSRA &= ~(1 << 7); // TURN OFF ADC CONVERTER
   power_adc_disable(); // ADC converter
@@ -101,10 +201,10 @@ void setup() {
     pinModeFast(i, OUTPUT);    // changed as per below
     digitalWriteFast(i, LOW);  //     ditto
   }
-  //pinModeFast(0,OUTPUT);
-  //pinModeFast(1,OUTPUT);
-  //digitalWriteFast(0, HIGH);
-  //digitalWriteFast(1, HIGH);
+  pinModeFast(0,OUTPUT);
+  pinModeFast(1,OUTPUT);
+  digitalWriteFast(0, HIGH);
+  digitalWriteFast(1, HIGH);
 
   pinModeFast(LED_PIN,OUTPUT);
   pinModeFast(SPEAKER_PIN,OUTPUT);
@@ -124,6 +224,16 @@ void setup() {
 
   readValues();               // pierwsze pobranie wartosci - populacja zmiennych
   setup_rf();
+
+    digitalWriteFast(5,HIGH);
+    delay(50);
+    digitalWriteFast(5,LOW);
+    delay(50);
+
+    digitalWriteFast(5,HIGH);
+    delay(50);
+    digitalWriteFast(5,LOW);
+    delay(50);
 }
 
 /*****************************************************
@@ -132,13 +242,13 @@ void setup() {
 void readValues() {
   prev_press = press;
 
-  power_spi_enable();
+  //power_spi_enable();
 
   bme1.setMode(11);
   press = bme1.readFixedPressure();
   bme1.setMode(00);
 
-  power_spi_disable();
+  //power_spi_disable();
 }
 // Brown-out disable // ->  avrdude -c usbasp -p m328p -U efuse:w:0x07:m
 
@@ -149,10 +259,13 @@ void checkPressure(){
   if(press > prev_press + SENSE_VALUE )   // jeśli nowy odczyt jest wiekszy o SENSE_VALUE od poprzedniego ->
   {
     was_whistled = true;
+    transmisjaCMT2110();
+
     wykonaj_transmisje();
-    //digitalWriteFast(SPEAKER_PIN,HIGH);
-    //delay(20);
-    //digitalWriteFast(SPEAKER_PIN,LOW);
+
+    digitalWriteFast(5,HIGH);
+    delay(50);
+    digitalWriteFast(5,LOW);
   }
 }
 
@@ -232,13 +345,13 @@ void loop() {
     pinModeFast(MISO,OUTPUT);
     pinModeFast(SCK,OUTPUT);
 
-    power_spi_enable();
-    power_timer1_enable();
+    //power_spi_enable();
+    //power_timer1_enable();
       bme1.begin();
       readValues();
       bme1.end();
-    power_timer1_disable();
-    power_spi_disable();
+    //power_timer1_disable();
+    //power_spi_disable();
 
     pinModeFast(SS,INPUT);
     pinModeFast(MOSI,INPUT);
@@ -265,8 +378,6 @@ void loop() {
   }
 
   checkTimeout(); // przy poprzednim dmuchnieciu funkcja ruszy 2 razy.. do zrobienia.
-
-  //delay(2000);
 
   LowPower.powerDown(sleeptime, ADC_OFF, BOD_OFF);
 }
