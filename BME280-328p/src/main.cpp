@@ -14,7 +14,6 @@
 #else
   #include <RH_ASK.h>
   #include <SPI.h> // Not actually used but needed to compile
-  #include <HopeDuino_CMT211xA.h> 
 #endif
 
 //#define TINY_BME280_I2C
@@ -35,13 +34,11 @@ period_t sleeptime = SLEEP_250MS;       // czas snu procesora
 #define TIME_TO_WAIT_MS 100             // czas do nastepnego wyzwolenia
 #define TIMEOUT_1       2000            // pierwszy timeiut
 #define TIMEOUT_2       3000
-#define LED_PIN         13
+#define LED_PIN         5
 #define SPEAKER_PIN     7 //A2 // 7 minipro
 #define TRANSMISION_PIN 0 // 4 w proto
 
-RH_ASK rfsender(2000,4,TRANSMISION_PIN,3,true);
-cmt211xaClass radio;
-byte str[7] = {'C', 'M', 'O', 'S', 'T', 'E', 'K'};
+RH_ASK rfsender(6250,4,TRANSMISION_PIN,3,true);
 
 void readValues();
 void checkTimeout();
@@ -56,9 +53,9 @@ volatile u8 TxRepeatCnt = 0;
 
 u8 Prefix = 0xA5;
 //at 0x8400 const code 
-u8 TblAdr[2] = {0, 0};
-u8 AdrMsb;
-u8 AdrLsb;
+u8 TblAdr[2] = {0, 1};
+u8 AdrMsb = 0x01;
+u8 AdrLsb = 0x01;
 u8 Cmd = 0xA1;	
 u8 Checksum = 0;
 
@@ -125,27 +122,40 @@ void transmisjaCMT2110()
 		idx++;	
 		}
 
+  Checksum = Prefix + AdrMsb + AdrLsb + Cmd;
+  
+  power_timer1_enable();
+
   digitalWriteFast(TRANSMISION_PIN,HIGH); // wybudzenie CMT2110
   delayMicroseconds(100); // 
   digitalWriteFast(TRANSMISION_PIN,LOW); // wybudzenie CMT2110
-  delay(5);
+  delay(4);
 
-  for(i=0;i<40;i++)
+  for(int repeat=0; repeat<=20; repeat++)
   {
-    if(TxTbl[0] == 0){
-      digitalWriteFast(TRANSMISION_PIN,LOW);
+    for(i=0; i<=40; i++)
+    {
+      if(TxTbl[0] == 0){
+        digitalWriteFast(TRANSMISION_PIN,LOW);
+        //delay(5);
+      }
+      else{
+        digitalWriteFast(TRANSMISION_PIN,HIGH);
+        //delay(5);
+      }
+      delayMicroseconds(160);
     }
-    else{
-      digitalWriteFast(TRANSMISION_PIN,HIGH);
-    }
-    delayMicroseconds(20);
+    delay(10);
+    //
+    //repeat++;
   }
   digitalWriteFast(TRANSMISION_PIN,LOW);
+  power_timer1_disable();
 }
 
 void wykonaj_transmisje()
 {
-  const char *msg = "1010 0101 0000 0000 0000 0000 1010 0001 0000 0000";
+  const char *msg = "1010010100000000000000001010000100000000";
  
   #ifdef VWRF
     digitalWrite(LED_PIN, HIGH); // Flash a light to show transmitting
@@ -156,10 +166,10 @@ void wykonaj_transmisje()
   #else
     power_timer1_enable();
     //digitalWriteFast(LED_PIN, HIGH); // Flash a light to show transmitting
-    
+
     rfsender.send((uint8_t *)msg, sizeof(msg));
     rfsender.waitPacketSent();
-
+    
     //digitalWriteFast(LED_PIN, LOW);
     power_timer1_disable();
   #endif
@@ -261,10 +271,13 @@ void checkPressure(){
     was_whistled = true;
     transmisjaCMT2110();
 
+    //wykonaj_transmisje();
+    //delay(10);
+    //wykonaj_transmisje();
+    //delay(10);
     wykonaj_transmisje();
-
     digitalWriteFast(5,HIGH);
-    delay(50);
+    delay(30);
     digitalWriteFast(5,LOW);
   }
 }
@@ -301,7 +314,7 @@ void checkTimeout()
     //delay(20);
     //digitalWriteFast(SPEAKER_PIN,LOW);
 
-    sleeptime = SLEEP_4S; // 4S
+    sleeptime = SLEEP_2S; // 4S
     //sleeptime = SLEEP_FOREVER;
     // setup ISR to WAKE UP!
     power_twi_disable();
