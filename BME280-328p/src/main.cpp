@@ -12,8 +12,8 @@
 #ifdef VWRF
   #include <VirtualWire.h>
 #else
-  #include <RH_ASK.h>
-  #include <SPI.h> // Not actually used but needed to compile
+  //#include <RH_ASK.h>
+  //#include <SPI.h> // Not actually used but needed to compile
 #endif
 
 //#define TINY_BME280_I2C
@@ -29,43 +29,52 @@ float press, prev_press;
 time_t current_positive, last_positive, // czas ostatniego dmuchniecia
           current_timeout;
 bool was_whistled;                      // flaga dmuchniete czy nie
-period_t sleeptime = SLEEP_250MS;       // czas snu procesora
+period_t sleeptime = SLEEP_120MS;       // czas snu procesora
                                         // 4 - 250ms / 6 - 1s / 8 - 4s..
-#define TIME_TO_WAIT_MS 100             // czas do nastepnego wyzwolenia
-#define TIMEOUT_1       2000            // pierwszy timeiut
-#define TIMEOUT_2       3000
+#define TIME_TO_WAIT_MS 50               // czas do nastepnego wyzwolenia
+#define TIMEOUT_1       3000            // pierwszy timeiut
+#define TIMEOUT_2       5000
 #define LED_PIN         5
 #define SPEAKER_PIN     7 //A2 // 7 minipro
 #define TRANSMISION_PIN 0 // 4 w proto
 
-RH_ASK rfsender(6250,4,TRANSMISION_PIN,3,true);
-
+void makeMsg();
 void readValues();
 void checkTimeout();
 
 //Nadawanie 
 u8 TxTbl[40];
-volatile u8 BitCnt = 0;
-volatile u8 BitNr = 0;
 volatile u8 HalfBit = 0;
-volatile u8 Tx_state;
-volatile u8 TxRepeatCnt = 0;
 
-u8 Prefix = 0xA5;
-//at 0x8400 const code 
-u8 TblAdr[2] = {0, 1};
-u8 AdrMsb = 0x01;
-u8 AdrLsb = 0x01;
-u8 Cmd = 0xA1;	
-u8 Checksum = 0;
+u8 Prefix = 0xA5; // Dzien dobry
+u8 AdrMsb = 0x00; // pierwszy bajt klucza
+u8 AdrLsb = 0x00; // drugi bajt klucza
+u8 Cmd = 0xA1;	  // Komenda
+u8 Checksum = 0;  // Suma kontrolna // Razem 40 bit.
 
-//u8 UID0;
-//u16 *ptr;
-
-void transmisjaCMT2110()
+// Przygotowuje RAMKE danych do odbiornika
+void makeMsg()
 {
-	u8 i;
+  // const char *msg = "1010010100000000000000001010000101000110";
+  /* RAMKA DLA PILOTA
+    Checksum = (u8) ([0xA5] + [0] + [0] +  [0xA1]) = 0x46
+    czyli sekwencja pilota dla adresu 0x0000 powinna być
+    1010 0101 0000 0000 0000 0000 1010 0001 0100 0110
+  */
+
+  u8 i;
 	u8 idx = 0;
+  HalfBit = 0;
+
+  /*
+  char TxTEMP[40];
+  strcpy(TxTEMP,msg);
+  for(int i=0; i<=40; i++){
+    TxTbl[i] = TxTEMP[i];
+  }
+  */
+ 
+  Checksum = Prefix + AdrMsb + AdrLsb + Cmd; // Oblicz sume kontrolna
 
 	i=0;
 	while(i < 8)
@@ -119,11 +128,14 @@ void transmisjaCMT2110()
 			else
 				TxTbl[idx] = 0;
 		i++;
-		idx++;	
+		idx++;
 		}
+}
 
-  Checksum = Prefix + AdrMsb + AdrLsb + Cmd;
-  
+//  Transmisja danych z pilota do odbiornika zgodnie z dokumentacja ELMAK na ukladzie CMT2110A z predkoscia 6250bps
+//  Kodowanie bifazowe, czas półbitu 160us
+void transmisjaCMT2110()
+{
   power_timer1_enable();
 
   digitalWriteFast(TRANSMISION_PIN,HIGH); // wybudzenie CMT2110
@@ -131,31 +143,34 @@ void transmisjaCMT2110()
   digitalWriteFast(TRANSMISION_PIN,LOW); // wybudzenie CMT2110
   delay(4);
 
-  for(int repeat=0; repeat<=20; repeat++)
+  for(int repeat=0; repeat<=2; repeat++) // powtorz ramke min 3 razy - wymagania elmak
   {
-    for(i=0; i<=40; i++)
+    for(int i=0; i<=40; i++)
     {
-      if(TxTbl[0] == 0){
-        digitalWriteFast(TRANSMISION_PIN,LOW);
-        //delay(5);
+      if(TxTbl[i] == 0){
+        PORTD &= ~(1 << PD0);   // LOW
+        //delayMicroseconds(30);  // Do poprawy - aby bitrate wyszedl 6250bps taki delay miedzy półbitami: realnie każdy półbit to 160us / bit 320us.
+        delayMicroseconds(160);
+        PORTD ^= (1 << PD0);    // Toggle ~ ! - kodowanie bifazowe to negacja drugiego półbitu
       }
       else{
-        digitalWriteFast(TRANSMISION_PIN,HIGH);
-        //delay(5);
+        PORTD |= (1 << PD0);    // LOW
+        delayMicroseconds(30);  // Do poprawy - aby bitrate wyszedl 6250bps taki delay miedzy półbitami: realnie każdy półbit to 160us / bit 320us.
+        delayMicroseconds(160);
+        PORTD ^= (1 << PD0);    // Toggle ~ ! - kodowanie bifazowe to negacja drugiego półbitu
       }
+      //delayMicroseconds(30);    // JW. 
       delayMicroseconds(160);
     }
-    delay(10);
-    //
-    //repeat++;
+    PORTD &= ~(1 << PD0);       // Po zakonczeniu ramki LOW
+    delay(10);                  // Delay do następnej ramki musi byc mniejszy od 20ms (po 20ms CMT2110 przechodzi w standby)
   }
-  digitalWriteFast(TRANSMISION_PIN,LOW);
-  power_timer1_disable();
+  //power_timer1_disable();
 }
 
 void wykonaj_transmisje()
 {
-  const char *msg = "1010010100000000000000001010000100000000";
+  const char *msg = "1010010100000000000000001010000101000110";
  
   #ifdef VWRF
     digitalWrite(LED_PIN, HIGH); // Flash a light to show transmitting
@@ -167,14 +182,15 @@ void wykonaj_transmisje()
     power_timer1_enable();
     //digitalWriteFast(LED_PIN, HIGH); // Flash a light to show transmitting
 
-    rfsender.send((uint8_t *)msg, sizeof(msg));
-    rfsender.waitPacketSent();
+    //rfsender.send((uint8_t *)msg, sizeof(msg));
+    //rfsender.waitPacketSent();
     
     //digitalWriteFast(LED_PIN, LOW);
     power_timer1_disable();
   #endif
 }
 
+//  Inicjalizacja transmisji RF (mozna usunac - wczesniej bylo dla radiohead)
 void setup_rf()
 {
   #ifdef VWRF
@@ -183,15 +199,17 @@ void setup_rf()
     vw_set_ptt_inverted(true); // Required for DR3100
     vw_setup(2000);       // Bits per sec
   #else
-    if (!rfsender.init()){} //    
+    //if (!rfsender.init()){} //    
   #endif
+
+  makeMsg();
 }
 
 /*****************************************************
  * SETUP
  * ***************************************************/
 void setup() {
-  //clock_prescale_set(clock_div_8);
+  //clock_prescale_set(clock_div_16);
 
   ADCSRA &= ~(1 << 7); // TURN OFF ADC CONVERTER
   power_adc_disable(); // ADC converter
@@ -201,9 +219,6 @@ void setup() {
   //power_timer1_disable();// Timer 1 - I2C...
   power_timer2_disable();// Timer 2
   
-  //bme1.setI2CAddress(0x76);
-  //bme1.beginI2C();
-
   bme1.begin();
 
   for (byte i = 0; i <= A5; i++)
@@ -235,29 +250,24 @@ void setup() {
   readValues();               // pierwsze pobranie wartosci - populacja zmiennych
   setup_rf();
 
-    digitalWriteFast(5,HIGH);
-    delay(50);
-    digitalWriteFast(5,LOW);
-    delay(50);
-
-    digitalWriteFast(5,HIGH);
-    delay(50);
-    digitalWriteFast(5,LOW);
-    delay(50);
+  //digitalWriteFast(5,HIGH);
+  //delay(50);
+  //digitalWriteFast(5,LOW);
+  //delay(50);
+  //clock_prescale_set(clock_div_4);
 }
 
 /*****************************************************
  * Pobiera dane z czujnika BME280
  * ***************************************************/
-void readValues() {
+void readValues() 
+{
   prev_press = press;
 
   //power_spi_enable();
-
   bme1.setMode(11);
   press = bme1.readFixedPressure();
   bme1.setMode(00);
-
   //power_spi_disable();
 }
 // Brown-out disable // ->  avrdude -c usbasp -p m328p -U efuse:w:0x07:m
@@ -265,20 +275,14 @@ void readValues() {
 /*****************************************************
  * Sprawdza czy cisnienie jest wieksze od zalozonego
  * ***************************************************/
-void checkPressure(){
+void checkPressure()
+{
   if(press > prev_press + SENSE_VALUE )   // jeśli nowy odczyt jest wiekszy o SENSE_VALUE od poprzedniego ->
   {
+    //clock_prescale_set(clock_div_16);
     was_whistled = true;
     transmisjaCMT2110();
-
-    //wykonaj_transmisje();
-    //delay(10);
-    //wykonaj_transmisje();
-    //delay(10);
-    wykonaj_transmisje();
-    digitalWriteFast(5,HIGH);
-    delay(30);
-    digitalWriteFast(5,LOW);
+    //clock_prescale_set(clock_div_1);
   }
 }
 
@@ -291,66 +295,29 @@ void checkTimeout()
   current_timeout = current_positive - last_positive;
 
   if(current_timeout > TIME_TO_WAIT_MS && current_timeout < TIMEOUT_1) // pierwszy prog
-  { // jezeli 
-    //last_positive = current_positive;
-    sleeptime = SLEEP_250MS;
-
-    //digitalWriteFast(SPEAKER_PIN,HIGH);
-    //delay(20);
-    //digitalWriteFast(SPEAKER_PIN,LOW);
+  {
+    sleeptime = SLEEP_120MS;
   }
   else if(current_timeout > TIMEOUT_1 && current_timeout < TIMEOUT_2) // drugi prog
   {
-    // zmniejsz probkowanie 1x/s
-    sleeptime = SLEEP_1S; // 1S
-
-    //digitalWriteFast(SPEAKER_PIN,HIGH);
-    //delay(20);
-    //digitalWriteFast(SPEAKER_PIN,LOW);
+    // zmniejsz probkowanie 2x/s
+    sleeptime = SLEEP_500MS; // 1S
   } 
   else if(current_timeout > TIMEOUT_2 )
   { 
-    //digitalWriteFast(SPEAKER_PIN,HIGH);
-    //delay(20);
-    //digitalWriteFast(SPEAKER_PIN,LOW);
-
-    sleeptime = SLEEP_2S; // 4S
+    sleeptime = SLEEP_1S; // 1S
     //sleeptime = SLEEP_FOREVER;
     // setup ISR to WAKE UP!
     power_twi_disable();
     power_usart0_disable();
-/*
-    //wdt_disable();
-
-    for (int i = 0; i < A5; i++) {
-    if(i != 2)//just because the button is hooked up to digital pin 2
-    pinMode(i, OUTPUT);
-    }
-    //attachInterrupt(0, digitalInterrupt, FALLING); //interrupt for waking up
-      //SETUP WATCHDOG TIMER
-    WDTCSR = (24);//change enable and WDE - also resets
-    WDTCSR = (33);//prescalers only - get rid of the WDE and WDCE bit
-    WDTCSR |= (1<<6);//enable interrupt mode
-
-    //Disable ADC - don't forget to flip back after waking up if using ADC in your application ADCSRA |= (1 << 7);
-    ADCSRA &= ~(1 << 7);
-    
-    //ENABLE SLEEP - this enables the sleep mode
-    SMCR |= (1 << 2); //power down mode
-    SMCR |= 1;//enable sleep
-    //BOD DISABLE - this must be called right before the __asm__ sleep instruction
-    MCUCR |= (3 << 5); //set both BODS and BODSE at the same time
-    MCUCR = (MCUCR & ~(1 << 5)) | (1 << 6); //then set the BODS bit and clear the BODSE bit at the same time
-
-*/
   }  
 }
 
 /**************************
  *  LOOP
  * ************************/
-void loop() {
-
+void loop() 
+{
   if(was_whistled == false)  // jeżeli poprzednio nie było dmuchnięcia
   {
     pinModeFast(SS,OUTPUT);
