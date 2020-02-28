@@ -2,47 +2,42 @@
 #include <avr/power.h>
 #include <avr/sleep.h>
 #include <time.h>
-
 #include <digitalWriteFast.h>
+
+// SLEEP LIB
 #include "LowPower.h"
 
-
-//#define VWRF
-
-#ifdef VWRF
-  #include <VirtualWire.h>
-#else
-  //#include <RH_ASK.h>
-  //#include <SPI.h> // Not actually used but needed to compile
-#endif
-
-//#define TINY_BME280_I2C
+// BME280 LIB
 #define TINY_BME280_SPI
 #include "TinyBME280.h"
-//#include "Wire.h"
+
+
+// SENSING VAL
 #define SENSE_VALUE 30
 
-
-tiny::BME280 bme1; //Uses I2C address 0x76 (jumper closed)
-
-float press, prev_press;
-time_t current_positive, last_positive, // czas ostatniego dmuchniecia
-          current_timeout;
-bool was_whistled;                      // flaga dmuchniete czy nie
-period_t sleeptime = SLEEP_120MS;       // czas snu procesora
-                                        // 4 - 250ms / 6 - 1s / 8 - 4s..
-#define TIME_TO_WAIT_MS 50               // czas do nastepnego wyzwolenia
+#define TIME_TO_WAIT_MS 50              // czas do nastepnego wyzwolenia
 #define TIMEOUT_1       3000            // pierwszy timeiut
 #define TIMEOUT_2       5000
 #define LED_PIN         5
 #define SPEAKER_PIN     7 //A2 // 7 minipro
 #define TRANSMISION_PIN 0 // 4 w proto
 
-void makeMsg();
-void readValues();
-void checkTimeout();
+tiny::BME280 bme1; //Uses I2C address 0x76 (jumper closed)
 
-//Nadawanie 
+float press, prev_press;
+time_t current_positive, last_positive, current_timeout; // czas ostatniego dmuchniecia
+bool was_whistled;                      // flaga dmuchniete czy nie
+period_t sleeptime = SLEEP_120MS;       // domyslny czas snu procesora
+
+void makeMsg();       // przygotowanie ramki danych
+void readValues();    // odczyt danych z czujnika
+void checkTimeout();  // sprawdzenie czasu
+void transmisjaCMT2110();
+void transmisjaCMT2110Timer();
+
+void setupTimer1();
+
+// Transmisja 
 u8 TxTbl[40];
 volatile u8 HalfBit = 0;
 
@@ -51,6 +46,34 @@ u8 AdrMsb = 0x00; // pierwszy bajt klucza
 u8 AdrLsb = 0x00; // drugi bajt klucza
 u8 Cmd = 0xA1;	  // Komenda
 u8 Checksum = 0;  // Suma kontrolna // Razem 40 bit.
+u8 BitNr;
+
+// Ustawia Timer1 na próbkowanie 6250 bps dla transmisji radiowej
+void setupTimer1()
+{
+  noInterrupts();
+  // Clear registers
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCNT1 = 0;
+
+  // 6250 Hz (8000000/((4+1)*256))
+  OCR1A = 4;
+  // CTC
+  TCCR1B |= (1 << WGM12);
+  // Prescaler 256
+  TCCR1B |= (1 << CS12);
+  // Output Compare Match A Interrupt Enable
+  TIMSK1 |= (1 << OCIE1A);
+  interrupts();
+}
+
+ISR(TIMER1_COMPA_vect) 
+{
+  digitalWriteFast(5, digitalReadFast(5) ^ 1);
+  transmisjaCMT2110Timer();
+}
+
 
 // Przygotowuje RAMKE danych do odbiornika
 void makeMsg()
@@ -130,6 +153,39 @@ void makeMsg()
 		i++;
 		idx++;
 		}
+}
+
+
+void transmisjaCMT2110Timer()
+{
+  if(BitNr < 40)
+	{
+		HalfBit++;
+		HalfBit &= 0x01;
+	
+  	if(HalfBit == 1)
+			BitNr++;
+		
+		if(HalfBit == 0)	//1-szy pó³bit
+		{
+  			if(TxTbl[BitNr] == 0)
+  				PORTD &= ~(1 << PD0);   // LOW
+  			else
+  				PORTD |= (1 << PD0);    // LOW
+		}
+		else
+    {
+      PORTD ^= (1 << PD0);
+    }
+  }
+	else
+	{
+		PORTD &= ~(1 << PD0);   // LOW
+			
+		//TIM3_ITConfig(TIM3_IT_Update, DISABLE);
+		//TIM3_Cmd(DISABLE);
+    noInterrupts();
+	}
 }
 
 //  Transmisja danych z pilota do odbiornika zgodnie z dokumentacja ELMAK na ukladzie CMT2110A z predkoscia 6250bps
@@ -249,6 +305,7 @@ void setup() {
 
   readValues();               // pierwsze pobranie wartosci - populacja zmiennych
   setup_rf();
+  setupTimer1();
 
   //digitalWriteFast(5,HIGH);
   //delay(50);
@@ -281,7 +338,16 @@ void checkPressure()
   {
     //clock_prescale_set(clock_div_16);
     was_whistled = true;
-    transmisjaCMT2110();
+
+    digitalWriteFast(TRANSMISION_PIN,HIGH); // wybudzenie CMT2110
+    delayMicroseconds(100); // 
+    digitalWriteFast(TRANSMISION_PIN,LOW); // wybudzenie CMT2110
+    delay(4);
+    BitNr =0;
+    HalfBit = 0;
+    interrupts();
+
+    transmisjaCMT2110Timer();
     //clock_prescale_set(clock_div_1);
   }
 }
@@ -359,5 +425,5 @@ void loop()
 
   checkTimeout(); // przy poprzednim dmuchnieciu funkcja ruszy 2 razy.. do zrobienia.
 
-  LowPower.powerDown(sleeptime, ADC_OFF, BOD_OFF);
+  //LowPower.powerDown(sleeptime, ADC_OFF, BOD_OFF);
 }
