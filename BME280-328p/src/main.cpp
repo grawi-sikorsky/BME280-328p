@@ -1,52 +1,11 @@
-#include <Wire.h>
-#include <avr/power.h>
-#include <avr/sleep.h>
-#include <time.h>
-#include <digitalWriteFast.h>
-
-// SLEEP LIB
-#include "LowPower.h"
-
-// BME280 LIB
-#define TINY_BME280_SPI
-#include "TinyBME280.h"
-
-
-// SENSING VAL
-#define SENSE_VALUE 30
-
-#define TIME_TO_WAIT_MS 50              // czas do nastepnego wyzwolenia
-#define TIMEOUT_1       3000            // pierwszy timeiut
-#define TIMEOUT_2       5000
-#define LED_PIN         5
-#define SPEAKER_PIN     7 //A2 // 7 minipro
-#define TRANSMISION_PIN 0 // 4 w proto
-
-tiny::BME280 bme1; //Uses I2C address 0x76 (jumper closed)
+#include "main.h"
 
 float press, prev_press;
 time_t current_positive, last_positive, current_timeout; // czas ostatniego dmuchniecia
 bool was_whistled;                      // flaga dmuchniete czy nie
 period_t sleeptime = SLEEP_120MS;       // domyslny czas snu procesora
 
-void makeMsg();       // przygotowanie ramki danych
-void readValues();    // odczyt danych z czujnika
-void checkTimeout();  // sprawdzenie czasu
-void transmisjaCMT2110();
-void transmisjaCMT2110Timer();
 
-void setupTimer1();
-
-// Transmisja 
-u8 TxTbl[40];
-volatile u8 HalfBit = 0;
-
-u8 Prefix = 0xA5; // Dzien dobry
-u8 AdrMsb = 0x00; // pierwszy bajt klucza
-u8 AdrLsb = 0x00; // drugi bajt klucza
-u8 Cmd = 0xA1;	  // Komenda
-u8 Checksum = 0;  // Suma kontrolna // Razem 40 bit.
-u8 BitNr;
 
 // Ustawia Timer1 na próbkowanie 6250 bps dla transmisji radiowej
 // 160 us polbit / 320 us bit transmisji
@@ -69,6 +28,7 @@ void setupTimer1()
   interrupts();
 }
 
+// Przerwanie Timer1 120 ms
 ISR(TIMER1_COMPA_vect) 
 {
   digitalWriteFast(5, digitalReadFast(5) ^ 1);
@@ -287,7 +247,6 @@ void readValues()
   bme1.setMode(00);
   //power_spi_disable();
 }
-// Brown-out disable // ->  avrdude -c usbasp -p m328p -U efuse:w:0x07:m
 
 /*****************************************************
  * Sprawdza czy cisnienie jest wieksze od zalozonego
