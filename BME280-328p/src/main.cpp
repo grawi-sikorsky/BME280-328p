@@ -49,6 +49,7 @@ u8 Checksum = 0;  // Suma kontrolna // Razem 40 bit.
 u8 BitNr;
 
 // Ustawia Timer1 na próbkowanie 6250 bps dla transmisji radiowej
+// 160 us polbit / 320 us bit transmisji
 void setupTimer1()
 {
   noInterrupts();
@@ -168,14 +169,14 @@ void transmisjaCMT2110Timer()
 		
 		if(HalfBit == 0)	//1-szy pó³bit
 		{
-  			if(TxTbl[BitNr] == 0)
-  				PORTD &= ~(1 << PD0);   // LOW
-  			else
-  				PORTD |= (1 << PD0);    // LOW
+      if(TxTbl[BitNr] == 0)
+        PORTD &= ~(1 << PD0);   // LOW
+      else
+        PORTD |= (1 << PD0);    // SUMA HIGH?
 		}
 		else
     {
-      PORTD ^= (1 << PD0);
+      PORTD ^= (1 << PD0);      // TOGGLE
     }
   }
 	else
@@ -184,7 +185,7 @@ void transmisjaCMT2110Timer()
 			
 		//TIM3_ITConfig(TIM3_IT_Update, DISABLE);
 		//TIM3_Cmd(DISABLE);
-    noInterrupts();
+    //noInterrupts();
 	}
 }
 
@@ -210,8 +211,8 @@ void transmisjaCMT2110()
         PORTD ^= (1 << PD0);    // Toggle ~ ! - kodowanie bifazowe to negacja drugiego półbitu
       }
       else{
-        PORTD |= (1 << PD0);    // LOW
-        delayMicroseconds(30);  // Do poprawy - aby bitrate wyszedl 6250bps taki delay miedzy półbitami: realnie każdy półbit to 160us / bit 320us.
+        PORTD |= (1 << PD0);    // SUMA
+        //delayMicroseconds(30);  // Do poprawy - aby bitrate wyszedl 6250bps taki delay miedzy półbitami: realnie każdy półbit to 160us / bit 320us.
         delayMicroseconds(160);
         PORTD ^= (1 << PD0);    // Toggle ~ ! - kodowanie bifazowe to negacja drugiego półbitu
       }
@@ -224,47 +225,11 @@ void transmisjaCMT2110()
   //power_timer1_disable();
 }
 
-void wykonaj_transmisje()
-{
-  const char *msg = "1010010100000000000000001010000101000110";
- 
-  #ifdef VWRF
-    digitalWrite(LED_PIN, HIGH); // Flash a light to show transmitting
-    vw_send((uint8_t *)&temperature, sizeof(temperature));
-    vw_wait_tx(); // Wait until the whole message is gone
-    digitalWrite(LED_PIN, LOW);
-    delay(500);
-  #else
-    power_timer1_enable();
-    //digitalWriteFast(LED_PIN, HIGH); // Flash a light to show transmitting
-
-    //rfsender.send((uint8_t *)msg, sizeof(msg));
-    //rfsender.waitPacketSent();
-    
-    //digitalWriteFast(LED_PIN, LOW);
-    power_timer1_disable();
-  #endif
-}
-
-//  Inicjalizacja transmisji RF (mozna usunac - wczesniej bylo dla radiohead)
-void setup_rf()
-{
-  #ifdef VWRF
-    // Initialise the IO and ISR
-    vw_set_tx_pin(TRANSMISION_PIN);
-    vw_set_ptt_inverted(true); // Required for DR3100
-    vw_setup(2000);       // Bits per sec
-  #else
-    //if (!rfsender.init()){} //    
-  #endif
-
-  makeMsg();
-}
-
 /*****************************************************
  * SETUP
  * ***************************************************/
-void setup() {
+void setup() 
+{
   //clock_prescale_set(clock_div_16);
 
   ADCSRA &= ~(1 << 7); // TURN OFF ADC CONVERTER
@@ -304,14 +269,9 @@ void setup() {
   digitalWriteFast(SCK,HIGH);
 
   readValues();               // pierwsze pobranie wartosci - populacja zmiennych
-  setup_rf();
-  setupTimer1();
+  makeMsg();                  // Przygotowuje ramke danych
 
-  //digitalWriteFast(5,HIGH);
-  //delay(50);
-  //digitalWriteFast(5,LOW);
-  //delay(50);
-  //clock_prescale_set(clock_div_4);
+  setupTimer1();              // Ustawia timer1
 }
 
 /*****************************************************
@@ -347,7 +307,7 @@ void checkPressure()
     HalfBit = 0;
     interrupts();
 
-    transmisjaCMT2110Timer();
+    //transmisjaCMT2110();
     //clock_prescale_set(clock_div_1);
   }
 }
@@ -420,10 +380,10 @@ void loop()
       last_positive = current_positive;
       was_whistled = false;
     }
-    power_timer1_disable();
+    //power_timer1_disable();
   }
 
   checkTimeout(); // przy poprzednim dmuchnieciu funkcja ruszy 2 razy.. do zrobienia.
 
-  //LowPower.powerDown(sleeptime, ADC_OFF, BOD_OFF);
+  LowPower.powerDown(sleeptime, ADC_OFF, BOD_OFF);
 }
