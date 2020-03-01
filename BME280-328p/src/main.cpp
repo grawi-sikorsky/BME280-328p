@@ -4,7 +4,7 @@ float press, prev_press;
 time_t current_positive, last_positive, current_timeout; // czas ostatniego dmuchniecia
 bool was_whistled;                      // flaga dmuchniete czy nie
 period_t sleeptime = SLEEP_120MS;       // domyslny czas snu procesora
-
+int data_repeat;
 
 
 // Ustawia Timer1 na próbkowanie 6250 bps dla transmisji radiowej
@@ -31,7 +31,6 @@ void setupTimer1()
 // Przerwanie Timer1 120 ms
 ISR(TIMER1_COMPA_vect) 
 {
-  digitalWriteFast(5, digitalReadFast(5) ^ 1);
   transmisjaCMT2110Timer();
 }
 
@@ -119,7 +118,7 @@ void makeMsg()
 
 void transmisjaCMT2110Timer()
 {
-  if(BitNr < 40)
+  if(BitNr < 40) // jesli ramka do zrobienia
 	{
 		HalfBit++;
 		HalfBit &= 0x01;
@@ -127,7 +126,7 @@ void transmisjaCMT2110Timer()
   	if(HalfBit == 1)
 			BitNr++;
 		
-		if(HalfBit == 0)	//1-szy pó³bit
+		if(HalfBit == 0)	// pierwszy polbit
 		{
       if(TxTbl[BitNr] == 0)
         PORTD &= ~(1 << PD0);   // LOW
@@ -139,13 +138,12 @@ void transmisjaCMT2110Timer()
       PORTD ^= (1 << PD0);      // TOGGLE
     }
   }
-	else
+	else // jesli brak bitow w ramce danych
 	{
 		PORTD &= ~(1 << PD0);   // LOW
-			
-		//TIM3_ITConfig(TIM3_IT_Update, DISABLE);
-		//TIM3_Cmd(DISABLE);
-    //noInterrupts();
+		
+    tx_state = TX_SENDING_REPEAT;
+    power_timer1_disable();
 	}
 }
 
@@ -154,6 +152,10 @@ void transmisjaCMT2110Timer()
 void transmisjaCMT2110()
 {
   power_timer1_enable();
+
+  BitNr =0;
+  HalfBit = 0;
+  interrupts();
 
   digitalWriteFast(TRANSMISION_PIN,HIGH); // wybudzenie CMT2110
   delayMicroseconds(100); // 
@@ -239,13 +241,31 @@ void setup()
  * ***************************************************/
 void readValues() 
 {
-  prev_press = press;
+  prev_press = press;       // Przypisz cisnienie do zmiennej przed kolejnym pomiarem 
+
+  pinModeFast(SS,OUTPUT);   // Ustaw piny SPI jako OUTPUT na czas pomiaru
+  pinModeFast(MOSI,OUTPUT); // bardzo niewielka ale zdaje sie jednak oszczednosc prundu
+  pinModeFast(MISO,OUTPUT);
+  pinModeFast(SCK,OUTPUT);
 
   //power_spi_enable();
+  //power_timer1_enable();
+  bme1.begin();
   bme1.setMode(11);
-  press = bme1.readFixedPressure();
+
+  press = bme1.readFixedPressure(); // Odczyt z czujnika bme
+
   bme1.setMode(00);
+  bme1.end();
+  //power_timer1_disable();
   //power_spi_disable();
+
+  pinModeFast(SS,INPUT);    // Ustaw piny SPI jako INPUT po pomiarze
+  pinModeFast(MOSI,INPUT);  // bardzo niewielka ale zdaje sie jednak oszczednosc prundu
+  pinModeFast(MISO,INPUT);
+  pinModeFast(SCK,INPUT);
+
+  ADCSRA &= ~(1 << 7);  // TURN OFF ADC CONVERTER
 }
 
 /*****************************************************
@@ -255,19 +275,11 @@ void checkPressure()
 {
   if(press > prev_press + SENSE_VALUE )   // jeśli nowy odczyt jest wiekszy o SENSE_VALUE od poprzedniego ->
   {
-    //clock_prescale_set(clock_div_16);
     was_whistled = true;
-
-    digitalWriteFast(TRANSMISION_PIN,HIGH); // wybudzenie CMT2110
-    delayMicroseconds(100); // 
-    digitalWriteFast(TRANSMISION_PIN,LOW); // wybudzenie CMT2110
-    delay(4);
-    BitNr =0;
-    HalfBit = 0;
-    interrupts();
-
-    //transmisjaCMT2110();
-    //clock_prescale_set(clock_div_1);
+  }
+  else
+  {
+    was_whistled = false;
   }
 }
 
@@ -303,32 +315,94 @@ void checkTimeout()
  * ************************/
 void loop() 
 {
+  switch (uc_state)
+  {
+    // Idz spac w pizdu.
+    case UC_GO_SLEEP:
+    {
+      digitalWriteFast(5, HIGH);
+      LowPower.powerDown(SLEEP_120MS,ADC_OFF,BOD_OFF);
+      digitalWriteFast(5,LOW);
+
+      uc_state = UC_WAKE_AND_CHECK; // pokimał? to sprawdzić co sie dzieje->
+      break;
+    }
+
+    // Pobudka i sprawdzamy czujnik
+    case UC_WAKE_AND_CHECK:
+    {
+      readValues();                 // odczyt
+      checkPressure();              // porównanie
+      if (was_whistled == true)     // zmiana -> wysylamy
+      {
+        uc_state = UC_SENDING_DATA;
+        tx_state = TX_WAKEUP_CMT;
+      }
+      else                          // brak zmiany -> sio spać dalej
+      {
+        uc_state = UC_GO_SLEEP;
+      }
+      break;
+    }
+
+    // Wysylka pakietow danych do odbiornika -> do spania!
+    case UC_SENDING_DATA:
+    {
+      if(tx_state == TX_WAKEUP_CMT)
+      {
+        digitalWriteFast(TRANSMISION_PIN,HIGH); // wybudzenie CMT2110
+        delayMicroseconds(100); //
+        digitalWriteFast(TRANSMISION_PIN,LOW); // wybudzenie CMT2110
+        delay(4);
+        tx_state = TX_SENDING_START;
+      }
+      else if(tx_state == TX_SENDING_START) // WYSYlAMY CALA RAMKE
+      {
+        BitNr = 0;
+        HalfBit = 0;
+        data_repeat = DATA_REPEAT_CNT;  // ilosc powtorzen
+        interrupts();                   // przerwania wlacz
+        power_timer1_enable();          // wlacz timer 6250bps to send data.
+        tx_state = TX_SENDING_PROGRESS; // czekaj na wyslanie 
+      }
+      else if(tx_state == TX_SENDING_PROGRESS)
+      {
+        // just wait for all bits to be sent..
+      }
+      else if(tx_state == TX_SENDING_REPEAT) // POWTARZAMY RAMKE (min 3x)
+      {
+        if(data_repeat > 0)
+        {
+          delay(5);
+          data_repeat--; // jesli ramka cala poszla to zmniejsz ilosc powtorzen..
+          BitNr = 0;
+          HalfBit = 0;
+          interrupts();           // przerwania wlacz
+          power_timer1_enable();
+          tx_state = TX_SENDING_PROGRESS;
+        }
+        else if(data_repeat == 0)
+        {
+          //delay(140); // -> delay powinien pojsc tam gdzie wykryte bedzie dalsze dmuchanie
+          uc_state = UC_SENDING_DONE;
+          power_timer1_disable();
+        }
+      }
+      break;
+    }
+
+    case UC_SENDING_DONE:
+    {
+      // wyzerowac pewnie itp.
+      uc_state = UC_GO_SLEEP;
+      break;
+    }
+  }
+
+/*
   if(was_whistled == false)  // jeżeli poprzednio nie było dmuchnięcia
   {
-    pinModeFast(SS,OUTPUT);
-    pinModeFast(MOSI,OUTPUT);
-    pinModeFast(MISO,OUTPUT);
-    pinModeFast(SCK,OUTPUT);
-
-    //power_spi_enable();
-    //power_timer1_enable();
-      bme1.begin();
-      readValues();
-      bme1.end();
-    //power_timer1_disable();
-    //power_spi_disable();
-
-    pinModeFast(SS,INPUT);
-    pinModeFast(MOSI,INPUT);
-    pinModeFast(MISO,INPUT);
-    pinModeFast(SCK,INPUT);
-
-    //digitalWriteFast(SS,HIGH);
-    //digitalWriteFast(MOSI,HIGH);
-    //digitalWriteFast(MISO,HIGH);
-    //digitalWriteFast(SCK,HIGH);
-    ADCSRA &= ~(1 << 7);
-
+    readValues();
     checkPressure();
   }
   else if(was_whistled == true) // jeżeli poprzednio było dmuchnięcie
@@ -340,9 +414,9 @@ void loop()
       was_whistled = false;
     }
     //power_timer1_disable();
-  }
+  }*/
 
   checkTimeout(); // przy poprzednim dmuchnieciu funkcja ruszy 2 razy.. do zrobienia.
 
-  LowPower.powerDown(sleeptime, ADC_OFF, BOD_OFF);
+  //LowPower.powerDown(sleeptime, ADC_OFF, BOD_OFF);
 }

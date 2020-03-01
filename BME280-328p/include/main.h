@@ -11,15 +11,17 @@
 #define TINY_BME280_SPI
 #include "TinyBME280.h"
 
-// SENSING VAL
-#define SENSE_VALUE 30
-
-#define TIME_TO_WAIT_MS 50              // czas do nastepnego wyzwolenia
-#define TIMEOUT_1       3000            // pierwszy timeiut
-#define TIMEOUT_2       5000
+// PINY
 #define LED_PIN         5
 #define SPEAKER_PIN     7 //A2 // 7 minipro
 #define TRANSMISION_PIN 0 // 4 w proto
+
+// KONFIGURACJA
+#define SENSE_VALUE     30
+#define TIME_TO_WAIT_MS 50              // czas do nastepnego wyzwolenia
+#define TIMEOUT_1       3000            // pierwszy timeiut
+#define TIMEOUT_2       5000
+#define DATA_REPEAT_CNT 2               // ilosc powtorzen transmisji (min 3 lub wiecej)
 
 tiny::BME280 bme1; //Uses I2C address 0x76 (jumper closed)
 
@@ -44,8 +46,17 @@ u8 BitNr;
 volatile u8 HalfBit = 0;
 
 enum uc_State {
-    SLEEPING = 0,
-    WAKE_AND_CHECK = 1,
-    SENDING_DATA = 2,
-  };
+  UC_GO_SLEEP = 0,
+  UC_WAKE_AND_CHECK = 1,
+  UC_SENDING_DATA = 2,
+  UC_SENDING_DONE = 3,
+};
+enum transmission_State {
+  TX_WAKEUP_CMT = 0,
+  TX_SENDING_START = 1,
+  TX_SENDING_PROGRESS = 2,
+  TX_SENDING_REPEAT = 3,
+};
+
 uc_State uc_state;
+transmission_State tx_state;
