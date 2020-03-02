@@ -18,7 +18,7 @@
 
 // KONFIGURACJA
 #define SENSE_VALUE     30
-#define SENSE_WHISTLED  10              // +/- widelki podczas wykrycia dmuchniecia
+#define SENSE_WHISTLED  0             // +/- widelki podczas wykrycia dmuchniecia
 #define TIME_TO_WAIT_MS 50              // czas do nastepnego wyzwolenia
 #define TIMEOUT_1       3000            // pierwszy timeiut
 #define TIMEOUT_2       5000

@@ -331,13 +331,10 @@ void checkPressure()
     if(press_odczyt > press_dmuch - SENSE_WHISTLED)
     {
       was_whistled = true;
-      //press_dmuch = press_odczyt;
     }
-    else if(press_odczyt < press_dmuch - SENSE_WHISTLED)
+    else// if(press_odczyt < press_dmuch - SENSE_WHISTLED)
     {
       was_whistled = false;
-      //press_dmuch = press_odczyt; // jesli nyc to 
-      return;
     }
   }
   else  // gdy dmuchane nie było
@@ -346,33 +343,6 @@ void checkPressure()
     {
       was_whistled = true;
       press_dmuch = press_odczyt;
-    }
-    else
-    {
-      was_whistled = false;
-    }
-  }
-}
-
-void checkPressureNew()
-{
-  if (was_whistled == true) // gdy bylo dmuchane
-  {
-    if(press_odczyt > press_otoczenia - SENSE_WHISTLED)
-    {
-      was_whistled = true;
-      press_dmuch = press_odczyt;
-    }
-    else if(press_odczyt < press_dmuch - SENSE_WHISTLED)
-    {
-      was_whistled = false;
-    }
-  }
-  else  // gdy dmuchane nie było
-  {
-    if(press_odczyt > press_otoczenia + SENSE_VALUE)  // jeśli nowy odczyt jest wiekszy o SENSE_VALUE od poprzedniego ->
-    {
-      was_whistled = true;
     }
     else
     {
