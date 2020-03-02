@@ -252,6 +252,7 @@ void setup()
   setupTimer1();              // Ustawia timer1
   power_timer1_disable(); // Timer 1 - I2C...
 
+  startup = false;
   uc_state = UC_GO_SLEEP; // default uC state
 }
 
@@ -302,6 +303,10 @@ void readValues()
   bme1.setMode(11);
 
   press_odczyt = bme1.readFixedPressure();  // Odczyt z czujnika bme
+  if(startup == true)
+  {
+    prev_press = press_odczyt; // jednorazowe na poczatku w setup
+  }
   //press_otoczenia = press_odczyt;           // zapis do zmiennej atm
 
   bme1.setMode(00);
