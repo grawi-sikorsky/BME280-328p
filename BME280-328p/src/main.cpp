@@ -128,7 +128,8 @@ void makeMsg()
 		}
 }
 
-
+//  Transmisja danych z pilota do odbiornika zgodnie z dokumentacja ELMAK na ukladzie CMT2110A z predkoscia 6250bps
+//  Kodowanie bifazowe, czas półbitu 160us
 void transmisjaCMT2110Timer()
 {
   if(BitNr <= 40) // jesli ramka do zrobienia
@@ -158,46 +159,6 @@ void transmisjaCMT2110Timer()
     tx_state = TX_SENDING_REPEAT;
     power_timer1_disable();
 	}
-}
-
-//  Transmisja danych z pilota do odbiornika zgodnie z dokumentacja ELMAK na ukladzie CMT2110A z predkoscia 6250bps
-//  Kodowanie bifazowe, czas półbitu 160us
-void transmisjaCMT2110()
-{
-  power_timer1_enable();
-
-  BitNr =0;
-  HalfBit = 0;
-  interrupts();
-
-  digitalWriteFast(TRANSMISION_PIN,HIGH); // wybudzenie CMT2110
-  delayMicroseconds(100); // 
-  digitalWriteFast(TRANSMISION_PIN,LOW); // wybudzenie CMT2110
-  delay(4);
-
-  for(int repeat=0; repeat<=2; repeat++) // powtorz ramke min 3 razy - wymagania elmak
-  {
-    for(int i=0; i<=40; i++)
-    {
-      if(TxTbl[i] == 0){
-        PORTD &= ~(1 << PD0);   // LOW
-        //delayMicroseconds(30);  // Do poprawy - aby bitrate wyszedl 6250bps taki delay miedzy półbitami: realnie każdy półbit to 160us / bit 320us.
-        delayMicroseconds(160);
-        PORTD ^= (1 << PD0);    // Toggle ~ ! - kodowanie bifazowe to negacja drugiego półbitu
-      }
-      else{
-        PORTD |= (1 << PD0);    // SUMA
-        //delayMicroseconds(30);  // Do poprawy - aby bitrate wyszedl 6250bps taki delay miedzy półbitami: realnie każdy półbit to 160us / bit 320us.
-        delayMicroseconds(160);
-        PORTD ^= (1 << PD0);    // Toggle ~ ! - kodowanie bifazowe to negacja drugiego półbitu
-      }
-      //delayMicroseconds(30);    // JW. 
-      delayMicroseconds(160);
-    }
-    PORTD &= ~(1 << PD0);       // Po zakonczeniu ramki LOW
-    delay(10);                  // Delay do następnej ramki musi byc mniejszy od 20ms (po 20ms CMT2110 przechodzi w standby)
-  }
-  //power_timer1_disable();
 }
 
 /*****************************************************
@@ -246,13 +207,17 @@ void setup()
   digitalWriteFast(SCK,HIGH);
 
   power_timer1_enable();  // Timer 1 - I2C...
-  //readValuesStartup();        
+  readValuesStartup();        
   readValues();               // pierwsze pobranie wartosci - populacja zmiennych
+
+  prev_press = press_odczyt; // jednorazowe na poczatku w setup
+
   makeMsg();                  // Przygotowuje ramke danych
   setupTimer1();              // Ustawia timer1
   power_timer1_disable(); // Timer 1 - I2C...
 
   startup = false;
+  was_whistled = false;
   uc_state = UC_GO_SLEEP; // default uC state
 }
 
@@ -270,11 +235,11 @@ void readValuesStartup()
   bme1.begin();
   bme1.setMode(11);
 
-  for(int i=1; i>3; i++)
+  for(int i=1; i<=5; i++)
   {
     press_otoczenia += bme1.readFixedPressure();  // Odczyt z czujnika bme
     press_otoczenia = press_otoczenia/i;
-    delay(10);
+    delay(200);
   }
 
   bme1.setMode(00);
@@ -303,11 +268,6 @@ void readValues()
   bme1.setMode(11);
 
   press_odczyt = bme1.readFixedPressure();  // Odczyt z czujnika bme
-  if(startup == true)
-  {
-    prev_press = press_odczyt; // jednorazowe na poczatku w setup
-  }
-  //press_otoczenia = press_odczyt;           // zapis do zmiennej atm
 
   bme1.setMode(00);
   bme1.end();
@@ -328,11 +288,15 @@ void checkPressure()
 { 
   if (was_whistled == true) // gdy bylo dmuchane
   {
-    if(press_odczyt > press_dmuch - SENSE_WHISTLED)
+    if(press_odczyt > prev_press + SENSE_VALUE)   // jesli jest wiecej niz wartosc graniczna
     {
       was_whistled = true;
     }
-    else// if(press_odczyt < press_dmuch - SENSE_WHISTLED)
+    else if(press_odczyt >= press_dmuch - SENSE_WHISTLED)
+    {
+      was_whistled = true;
+    }
+    else
     {
       was_whistled = false;
     }
@@ -349,14 +313,6 @@ void checkPressure()
       was_whistled = false;
     }
   }
-}
-
-/****************************************************
- * Sprawdz czy dalej dmuchane jest w otwory dmuchawne
- * *************************************************/
-bool stillWhistled()
-{
-
 }
 
 /*****************************************************
@@ -396,10 +352,10 @@ void loop()
     // Idz spac w pizdu.
     case UC_GO_SLEEP:
     {
-      //digitalWriteFast(5, HIGH);
+      digitalWriteFast(5, HIGH);
       prepareToSleep();
       LowPower.powerDown(sleeptime,ADC_OFF,BOD_OFF);
-      //digitalWriteFast(5,LOW);
+      digitalWriteFast(5,LOW);
 
       uc_state = UC_WAKE_AND_CHECK; // pokimał? to sprawdzić co sie dzieje->
       break;
@@ -472,11 +428,9 @@ void loop()
 
     case UC_SENDING_DONE:
     {
-      // wyzerowac pewnie itp.
-      //uc_state = UC_WAKE_AND_CHECK;
       uc_state = UC_GO_SLEEP;
       break;
     }
   }
-  checkTimeout(); // przy poprzednim dmuchnieciu funkcja ruszy 2 razy.. do zrobienia.
+  //checkTimeout(); // przy poprzednim dmuchnieciu funkcja ruszy 2 razy.. do zrobienia.
 }

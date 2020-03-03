@@ -18,7 +18,7 @@
 
 // KONFIGURACJA
 #define SENSE_VALUE     30
-#define SENSE_WHISTLED  0             // +/- widelki podczas wykrycia dmuchniecia
+#define SENSE_WHISTLED  8             // +/- widelki podczas wykrycia dmuchniecia
 #define TIME_TO_WAIT_MS 50              // czas do nastepnego wyzwolenia
 #define TIMEOUT_1       3000            // pierwszy timeiut
 #define TIMEOUT_2       5000
@@ -30,15 +30,11 @@ void makeMsg();       // przygotowanie ramki danych
 void readValuesStartup();
 void readValues();    // odczyt danych z czujnika
 void checkPressure(); // sprawdza czy wzrost
-bool stillWhistled();
 void checkTimeout();  // sprawdzenie czasu
-void transmisjaCMT2110();
 void transmisjaCMT2110Timer();
-
 
 void prepareToSleep();
 void setupTimer1();
-
 
 // Transmisja 
 u8 TxTbl[40];
