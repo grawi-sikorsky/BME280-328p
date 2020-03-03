@@ -17,8 +17,8 @@
 #define TRANSMISION_PIN 0 // 4 w proto
 
 // KONFIGURACJA
-#define SENSE_VALUE     30
-#define SENSE_WHISTLED  8             // +/- widelki podczas wykrycia dmuchniecia
+#define SENSE_VALUE     50
+#define SENSE_WHISTLED  12             // +/- widelki podczas wykrycia dmuchniecia
 #define TIME_TO_WAIT_MS 50              // czas do nastepnego wyzwolenia
 #define TIMEOUT_1       3000            // pierwszy timeiut
 #define TIMEOUT_2       5000
