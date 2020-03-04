@@ -17,8 +17,13 @@
 #define TRANSMISION_PIN 0 // 4 w proto
 
 // KONFIGURACJA
-#define SENSE_VALUE     50
-#define SENSE_WHISTLED  12             // +/- widelki podczas wykrycia dmuchniecia
+#define PRESS_ATM_PROBE_COUNT 10
+#define SENSE_VALUE     250
+#define SENSE_LOW_VALUE 40      
+
+#define SENSE_WHISTLED  5             // +/- widelki podczas wykrycia dmuchniecia
+#define VACUUM_IGNORE   1     
+
 #define TIME_TO_WAIT_MS 50              // czas do nastepnego wyzwolenia
 #define TIMEOUT_1       3000            // pierwszy timeiut
 #define TIMEOUT_2       5000
@@ -30,6 +35,7 @@ void makeMsg();       // przygotowanie ramki danych
 void readValuesStartup();
 void readValues();    // odczyt danych z czujnika
 void checkPressure(); // sprawdza czy wzrost
+void checkPressureTEST();
 void checkTimeout();  // sprawdzenie czasu
 void transmisjaCMT2110Timer();
 

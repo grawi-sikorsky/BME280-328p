@@ -235,12 +235,13 @@ void readValuesStartup()
   bme1.begin();
   bme1.setMode(11);
 
-  for(int i=1; i<=5; i++)
+  delay(100);
+  for(int i=1; i <= PRESS_ATM_PROBE_COUNT; i++)
   {
+    delay(150);
     press_otoczenia += bme1.readFixedPressure();  // Odczyt z czujnika bme
-    press_otoczenia = press_otoczenia/i;
-    delay(200);
   }
+  press_otoczenia = press_otoczenia/PRESS_ATM_PROBE_COUNT;
 
   bme1.setMode(00);
   bme1.end();
@@ -256,7 +257,16 @@ void readValuesStartup()
  * ***************************************************/
 void readValues() 
 {
-  prev_press = press_odczyt;       // Przypisz cisnienie do zmiennej przed kolejnym pomiarem 
+  // prev
+  if(was_whistled == false && press_odczyt <= prev_press - VACUUM_IGNORE)
+  {
+    // do nothing! false alarm -> podcisnienie
+  }
+  else
+  {
+    //prev_press = press_odczyt;
+  }
+  prev_press = press_odczyt;
 
   pinModeFast(SS,OUTPUT);   // Ustaw piny SPI jako OUTPUT na czas pomiaru
   pinModeFast(MOSI,OUTPUT); // bardzo niewielka ale zdaje sie jednak oszczednosc prundu
@@ -286,10 +296,11 @@ void readValues()
  * ***************************************************/
 void checkPressure()
 { 
-  if (was_whistled == true) // gdy bylo dmuchane
+  if (was_whistled == true) // gdy w poprzednim cyklu bylo dmuchane
   {
     if(press_odczyt > prev_press + SENSE_VALUE)   // jesli jest wiecej niz wartosc graniczna
-    {
+    { // tu jest blad bo jesli bedzie podcisnienie 800hpa i trafi do prev to zawsze
+    // bedzie true-> wiec swieci!
       was_whistled = true;
     }
     else if(press_odczyt >= press_dmuch - SENSE_WHISTLED)
@@ -298,10 +309,12 @@ void checkPressure()
     }
     else
     {
+      prev_press = press_odczyt; // musi byc tutaj aby zapobiec 1000->800
+                                // malo bezpieczne gdyby np. odczyt nie byl srednia atmosferyczna
       was_whistled = false;
     }
   }
-  else  // gdy dmuchane nie było
+  else  // gdy w poprzednim cyklu dmuchane nie było
   {
     if(press_odczyt > prev_press + SENSE_VALUE)   // jeśli nowy odczyt jest wiekszy o SENSE_VALUE od poprzedniego ->
     {
@@ -312,6 +325,22 @@ void checkPressure()
     {
       was_whistled = false;
     }
+  }
+}
+
+void checkPressureTEST()
+{
+  if(press_odczyt >= press_otoczenia + SENSE_VALUE)
+  {
+    was_whistled = true;
+  }
+  else if(press_odczyt <= press_otoczenia + SENSE_LOW_VALUE )
+  {
+    was_whistled = false;
+  }
+  else
+  {
+    was_whistled = false;
   }
 }
 
@@ -366,7 +395,7 @@ void loop()
     {
       clock_prescale_set(clock_div_1);
       readValues();                 // odczyt
-      checkPressure();              // 
+      checkPressureTEST();              // 
                 
       if (was_whistled == true)     // zmiana -> wysylamy
       {
@@ -383,7 +412,6 @@ void loop()
     // Wysylka pakietow danych do odbiornika -> do spania!
     case UC_SENDING_DATA:
     {
-      //transmisjaCMT2110();
       if(tx_state == TX_WAKEUP_CMT)
       {
         digitalWriteFast(TRANSMISION_PIN,HIGH); // wybudzenie CMT2110
@@ -409,7 +437,7 @@ void loop()
       {
         if(data_repeat > 0)
         {
-          delay(5);
+          delay(4);
           data_repeat--; // jesli ramka cala poszla to zmniejsz ilosc powtorzen..
           BitNr = 0;
           //interrupts();           // przerwania wlacz
