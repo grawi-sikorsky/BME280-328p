@@ -25,7 +25,7 @@
 #define VACUUM_IGNORE   1     
 
 #define TIME_TO_WAIT_MS 50              // czas do nastepnego wyzwolenia
-#define TIMEOUT_1       3000            // pierwszy timeiut
+#define TIMEOUT_1       3000            // pierwszy timeiut // realnie wychodzi jakies 33 s ? (15s)
 #define TIMEOUT_2       5000
 #define DATA_REPEAT_CNT 2               // ilosc powtorzen transmisji (min 3 lub wiecej)
 

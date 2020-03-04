@@ -333,6 +333,7 @@ void checkPressureTEST()
   if(press_odczyt >= press_otoczenia + SENSE_VALUE)
   {
     was_whistled = true;
+    last_positive = millis();
   }
   else if(press_odczyt <= press_otoczenia + SENSE_LOW_VALUE )
   {
@@ -381,7 +382,9 @@ void loop()
     // Idz spac w pizdu.
     case UC_GO_SLEEP:
     {
+      delay(10);
       digitalWriteFast(5, HIGH);
+      checkTimeout();
       prepareToSleep();
       LowPower.powerDown(sleeptime,ADC_OFF,BOD_OFF);
       digitalWriteFast(5,LOW);
@@ -395,7 +398,7 @@ void loop()
     {
       clock_prescale_set(clock_div_1);
       readValues();                 // odczyt
-      checkPressureTEST();              // 
+      checkPressureTEST();          // compare
                 
       if (was_whistled == true)     // zmiana -> wysylamy
       {
