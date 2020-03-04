@@ -166,7 +166,7 @@ void transmisjaCMT2110Timer()
  * ***************************************************/
 void setup() 
 {
-  //clock_prescale_set(clock_div_16);
+  clock_prescale_set(clock_div_1);
 
   ADCSRA &= ~(1 << 7); // TURN OFF ADC CONVERTER
   power_adc_disable(); // ADC converter
@@ -257,16 +257,7 @@ void readValuesStartup()
  * ***************************************************/
 void readValues() 
 {
-  // prev
-  if(was_whistled == false && press_odczyt <= prev_press - VACUUM_IGNORE)
-  {
-    // do nothing! false alarm -> podcisnienie
-  }
-  else
-  {
-    //prev_press = press_odczyt;
-  }
-  prev_press = press_odczyt;
+  //prev_press = press_odczyt; // nie potrzebne?
 
   pinModeFast(SS,OUTPUT);   // Ustaw piny SPI jako OUTPUT na czas pomiaru
   pinModeFast(MOSI,OUTPUT); // bardzo niewielka ale zdaje sie jednak oszczednosc prundu
@@ -330,19 +321,30 @@ void checkPressure()
 
 void checkPressureTEST()
 {
-  if(press_odczyt >= press_otoczenia + SENSE_VALUE)
+  if(was_whistled == false) // nie było dmuchnięte
   {
-    was_whistled = true;
-    last_positive = millis();
+    if(press_odczyt >= press_otoczenia + SENSE_VALUE)
+    {
+      was_whistled = true;
+      last_positive = millis();
+    }
+    else 
+    {
+      was_whistled = false;
+    }
   }
-  else if(press_odczyt <= press_otoczenia + SENSE_LOW_VALUE )
+  else // było dmuchnięte
   {
-    was_whistled = false;
+    if(press_odczyt <= press_otoczenia + SENSE_LOW_VALUE )
+    {
+      was_whistled = false;
+    }
+    else
+    {
+      was_whistled = false;
+    }
   }
-  else
-  {
-    was_whistled = false;
-  }
+
 }
 
 /*****************************************************
@@ -382,13 +384,14 @@ void loop()
     // Idz spac w pizdu.
     case UC_GO_SLEEP:
     {
-      delay(10);
-      digitalWriteFast(5, HIGH);
-      checkTimeout();
+      //delay(10);
+      //digitalWriteFast(5, HIGH);
+      //checkTimeout();
       prepareToSleep();
       LowPower.powerDown(sleeptime,ADC_OFF,BOD_OFF);
-      digitalWriteFast(5,LOW);
+      //digitalWriteFast(5,LOW);
 
+      clock_prescale_set(clock_div_1); // podczas spania 1mhz -> po pobudce 8
       uc_state = UC_WAKE_AND_CHECK; // pokimał? to sprawdzić co sie dzieje->
       break;
     }
@@ -396,7 +399,6 @@ void loop()
     // Pobudka i sprawdzamy czujnik
     case UC_WAKE_AND_CHECK:
     {
-      clock_prescale_set(clock_div_1);
       readValues();                 // odczyt
       checkPressureTEST();          // compare
                 
@@ -440,14 +442,14 @@ void loop()
       {
         if(data_repeat > 0)
         {
-          delay(4);
+          delay(3);
           data_repeat--; // jesli ramka cala poszla to zmniejsz ilosc powtorzen..
           BitNr = 0;
           //interrupts();           // przerwania wlacz
           power_timer1_enable();
           tx_state = TX_SENDING_PROGRESS;
         }
-        else if(data_repeat == 0)
+        else// if(data_repeat == 0)
         {
           //delay(140); // -> delay powinien pojsc tam gdzie wykryte bedzie dalsze dmuchanie
           uc_state = UC_SENDING_DONE;
