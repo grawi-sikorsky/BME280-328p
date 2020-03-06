@@ -55,6 +55,16 @@ ISR(TIMER1_COMPA_vect)
   transmisjaCMT2110Timer();
 }
 
+// Przerwanie dla przycisku
+void ISR_INT0_vect()
+{
+  ButtonPressed();
+}
+
+void ButtonPressed()
+{
+  digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+}
 
 // Przygotowuje RAMKE danych do odbiornika
 void makeMsg()
@@ -193,6 +203,7 @@ void setup()
   pinModeFast(LED_PIN,OUTPUT);
   pinModeFast(SPEAKER_PIN,OUTPUT);
   pinModeFast(TRANSMISION_PIN,OUTPUT);
+  pinModeFast(USER_SWITCH,INPUT);
   digitalWriteFast(LED_PIN, LOW);  // LED OFF
   digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
   digitalWriteFast(TRANSMISION_PIN, LOW);    // RF433
@@ -209,12 +220,14 @@ void setup()
   power_timer1_enable();  // Timer 1 - I2C...
   readValuesStartup();        
   readValues();               // pierwsze pobranie wartosci - populacja zmiennych
-
   prev_press = press_odczyt; // jednorazowe na poczatku w setup
 
   makeMsg();                  // Przygotowuje ramke danych
+
   setupTimer1();              // Ustawia timer1
   power_timer1_disable(); // Timer 1 - I2C...
+  
+  attachInterrupt(digitalPinToInterrupt(2), ISR_INT0_vect, RISING);
 
   startup = false;
   was_whistled = false;

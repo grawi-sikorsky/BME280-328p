@@ -15,10 +15,11 @@
 #define LED_PIN         5
 #define SPEAKER_PIN     7 //A2 // 7 minipro
 #define TRANSMISION_PIN 0 // 4 w proto
+#define USER_SWITCH     2 // PD2 INT0
 
 // KONFIGURACJA
 #define PRESS_ATM_PROBE_COUNT 10
-#define SENSE_VALUE     250
+#define SENSE_VALUE     100
 #define SENSE_LOW_VALUE 40      
 
 #define SENSE_WHISTLED  5             // +/- widelki podczas wykrycia dmuchniecia
@@ -38,6 +39,8 @@ void checkPressure(); // sprawdza czy wzrost
 void checkPressureTEST();
 void checkTimeout();  // sprawdzenie czasu
 void transmisjaCMT2110Timer();
+
+void ButtonPressed();
 
 void prepareToSleep();
 void setupTimer1();
