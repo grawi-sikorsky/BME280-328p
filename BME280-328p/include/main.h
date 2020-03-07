@@ -26,8 +26,8 @@
 #define VACUUM_IGNORE   1     
 
 #define TIME_TO_WAIT_MS 50              // czas do nastepnego wyzwolenia
-#define TIMEOUT_1       3000            // pierwszy timeiut // realnie wychodzi jakies 33 s ? (15s)
-#define TIMEOUT_2       5000
+#define TIMEOUT_1       1800000       // pierwszy timeiut // realnie wychodzi jakies (1 800 000 ms = 30 min)
+#define TIMEOUT_2       3600000       // drugi prog = 5 400 000 = 90 min // z uwagi na sleep-millis: 60 min
 #define DATA_REPEAT_CNT 2               // ilosc powtorzen transmisji (min 3 lub wiecej)
 
 tiny::BME280 bme1; //Uses I2C address 0x76 (jumper closed)
@@ -41,6 +41,7 @@ void checkTimeout();  // sprawdzenie czasu
 void transmisjaCMT2110Timer();
 
 void ButtonPressed();
+void TurnOff();
 
 void prepareToSleep();
 void setupTimer1();

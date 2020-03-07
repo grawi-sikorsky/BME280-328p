@@ -5,15 +5,21 @@ float press_otoczenia;
 float press_dmuch;
 
 time_t current_positive, last_positive, current_timeout; // czas ostatniego dmuchniecia
+time_t btn_current, btn_last, btn_timeout;
+
 bool was_whistled = false;              // flaga dmuchniete czy nie
+bool na_minusie = false;
+
+bool btn_pressed = false;
+bool device_Off = false;
+
 bool startup = true;
 period_t sleeptime = SLEEP_120MS;       // domyslny czas snu procesora
 int data_repeat;
 
 //test
 
-
-// Ustawia Timer1 na prÃ³bkowanie 6250 bps dla transmisji radiowej
+// Ustawia Timer1 na próbkowanie 6250 bps dla transmisji radiowej
 // 160 us polbit / 320 us bit transmisji
 void setupTimer1()
 {
@@ -37,7 +43,7 @@ void setupTimer1()
 // Wylacza wszystko do spania
 void prepareToSleep()
 {
-  clock_prescale_set(clock_div_16);
+  //clock_prescale_set(clock_div_16);
 
   ADCSRA &= ~(1 << 7); // TURN OFF ADC CONVERTER
 
@@ -45,10 +51,18 @@ void prepareToSleep()
   power_spi_disable(); // SPI
   //power_usart0_disable();// Serial (USART) test
   //power_timer0_disable();// TIMER 0 SLEEP WDT ...
-  power_timer1_disable();// Timer 1
-  power_timer2_disable();// Timer 2
+  //power_timer1_disable();// Timer 1
+  //power_timer2_disable();// Timer 2
 
   PORTD &= ~(1 << PD0);   // LOW pin0 CMT2110
+}
+
+// Wylacza sie po nacisnieciu guzila
+void turnOff()
+{
+  prepareToSleep();
+  sleeptime = SLEEP_FOREVER;
+  uc_state = UC_GO_SLEEP;
 }
 
 // Przerwanie Timer1 120 ms
@@ -66,6 +80,21 @@ void ISR_INT0_vect()
 void ButtonPressed()
 {
   digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+
+  //btn_last = millis();  // pobierz czas.
+
+  if(device_Off == true)  // je¶li urzadzenie jest wylaczone
+  { 
+    // w³±cz
+    device_Off = false;
+    uc_state = UC_WAKE_AND_CHECK;
+  }
+  else                    // je¶li w³±czone
+  {
+    //wy³±cz
+    device_Off = true;
+    turnOff();
+  }
 }
 
 // Przygotowuje RAMKE danych do odbiornika
@@ -74,7 +103,7 @@ void makeMsg()
   // const char *msg = "1010010100000000000000001010000101000110";
   /* RAMKA DLA PILOTA
     Checksum = (u8) ([0xA5] + [0] + [0] +  [0xA1]) = 0x46
-    czyli sekwencja pilota dla adresu 0x0000 powinna byÄ‡
+    czyli sekwencja pilota dla adresu 0x0000 powinna byæ
     1010 0101 0000 0000 0000 0000 1010 0001 0100 0110
   */
 
@@ -141,7 +170,7 @@ void makeMsg()
 }
 
 //  Transmisja danych z pilota do odbiornika zgodnie z dokumentacja ELMAK na ukladzie CMT2110A z predkoscia 6250bps
-//  Kodowanie bifazowe, czas pÃ³Å‚bitu 160us
+//  Kodowanie bifazowe, czas pó³bitu 160us
 void transmisjaCMT2110Timer()
 {
   if(BitNr <= 40) // jesli ramka do zrobienia
@@ -301,20 +330,10 @@ void readValues()
     94914.00
     94930.00
     94940.00
-    94946.00
-    94954.00
-    94964.00
-    94970.00
-    94972.00
-    94980.00
-    94980.00
-    */
-  // 
-  // wahania w czasie odczytow co 200ms:
-  // np. 95152.00 -> 30s. -> 95240.00 -> 60s -> 95125.00 -> 
+  */
 
 
-  //prev_press = press_odczyt; // nie potrzebne?
+  prev_press = press_odczyt; // nie potrzebne?
 
   pinModeFast(SS,OUTPUT);   // Ustaw piny SPI jako OUTPUT na czas pomiaru
   pinModeFast(MOSI,OUTPUT); // bardzo niewielka ale zdaje sie jednak oszczednosc prundu
@@ -326,10 +345,6 @@ void readValues()
   bme1.setMode(11);
 
   press_odczyt = bme1.readFixedPressure();  // Odczyt z czujnika bme
-  //test
-  Serial.begin(9600);
-  delay(5);
-  Serial.println(press_odczyt);
 
   bme1.setMode(00);
   bme1.end();
@@ -366,9 +381,9 @@ void checkPressure()
       was_whistled = false;
     }
   }
-  else  // gdy w poprzednim cyklu dmuchane nie byÅ‚o
+  else  // gdy w poprzednim cyklu dmuchane nie by³o
   {
-    if(press_odczyt > prev_press + SENSE_VALUE)   // jeÅ›li nowy odczyt jest wiekszy o SENSE_VALUE od poprzedniego ->
+    if(press_odczyt > prev_press + SENSE_VALUE)   // je¶li nowy odczyt jest wiekszy o SENSE_VALUE od poprzedniego ->
     {
       was_whistled = true;
       press_dmuch = press_odczyt;
@@ -382,7 +397,7 @@ void checkPressure()
 
 void checkPressureTEST()
 {
-  if(was_whistled == false) // nie byÅ‚o dmuchniÄ™te
+  if(was_whistled == false) // nie by³o dmuchniête
   {
     if(press_odczyt >= press_otoczenia + SENSE_VALUE)
     {
@@ -394,7 +409,7 @@ void checkPressureTEST()
       was_whistled = false;
     }
   }
-  else // byÅ‚o dmuchniÄ™te
+  else // by³o dmuchniête
   {
     if(press_odczyt <= press_otoczenia + SENSE_LOW_VALUE )
     {
@@ -410,7 +425,52 @@ void checkPressureTEST()
 
 void checkPressure3()
 {
-  
+  if (was_whistled == true) // gdy w poprzednim cyklu bylo dmuchane
+  {
+    last_positive = millis();
+
+    if(press_odczyt > prev_press + SENSE_VALUE)   // jesli jest wiecej niz wartosc graniczna
+    { // tu jest blad bo jesli bedzie podcisnienie 800hpa i trafi do prev to zawsze
+    // bedzie true-> wiec swieci!
+      was_whistled = true;
+      Serial.print("isT setT; "); Serial.print("NOW: "); Serial.print(press_odczyt); Serial.print(" WAS: "); Serial.print(prev_press); Serial.print(" S: ");Serial.print(press_odczyt-prev_press); Serial.println(" laaa");
+    }
+    else if(press_odczyt >= press_dmuch - SENSE_WHISTLED)
+    {
+      was_whistled = true;
+      Serial.print("isT setT; "); Serial.print("NOW: "); Serial.print(press_odczyt); Serial.print(" DMU: "); Serial.print(press_dmuch); Serial.print(" S: ");Serial.print(press_odczyt-prev_press); Serial.println(" laaa");
+    }
+    else
+    {
+     //prev_press = press_odczyt; // musi byc tutaj aby zapobiec 1000->800
+                                // malo bezpieczne gdyby np. odczyt nie byl srednia atmosferyczna
+      was_whistled = false;
+      Serial.print("isT setF; "); Serial.print("NOW: "); Serial.print(press_odczyt); Serial.print(" WAS: "); Serial.print(prev_press); Serial.print(" S: ");Serial.print(press_odczyt-prev_press); Serial.println(" laaa");
+    }
+  }
+  else  // gdy w poprzednim cyklu dmuchane nie by³o
+  {
+    if((press_odczyt > prev_press + SENSE_VALUE) && na_minusie == false)// && !(prev_press < press_odczyt - SENSE_VALUE))   // je¶li nowy odczyt jest wiekszy o SENSE_VALUE od poprzedniego ->
+    {
+      was_whistled = true;
+      press_dmuch = press_odczyt;
+      Serial.print("isF setT; "); Serial.print("NOW: "); Serial.print(press_odczyt); Serial.print(" WAS: "); Serial.print(prev_press); Serial.print(" S: ");Serial.print(press_odczyt-prev_press); Serial.println(" laaa");
+    }
+    else
+    {
+      was_whistled = false;
+      Serial.print("isF setF; "); Serial.print("NOW: "); Serial.print(press_odczyt); Serial.print(" WAS: "); Serial.print(prev_press); Serial.print(" S: ");Serial.print(press_odczyt-prev_press); Serial.println(" laaa");
+    }
+  }
+
+  if (press_odczyt < prev_press - SENSE_VALUE)
+  {
+    na_minusie = true;
+  }
+  else
+  {
+    na_minusie = false;
+  }
 }
 /*****************************************************
  * TEST - TIMEOUT
@@ -419,6 +479,9 @@ void checkTimeout()
 {
   current_positive = millis();  // pobierz czas.
   current_timeout = current_positive - last_positive;
+  Serial.print("CurrentPos: "); Serial.println(current_positive);
+  Serial.print("CurrentTO: "); Serial.println(current_timeout);
+  Serial.print("LastPos: "); Serial.println(last_positive);
 
   if(current_timeout > TIME_TO_WAIT_MS && current_timeout < TIMEOUT_1) // pierwszy prog
   {
@@ -431,11 +494,7 @@ void checkTimeout()
   } 
   else if(current_timeout > TIMEOUT_2 )
   { 
-    sleeptime = SLEEP_1S; // 1S
-    //sleeptime = SLEEP_FOREVER;
-    // setup ISR to WAKE UP!
-    //power_twi_disable();
-    //power_usart0_disable();
+    turnOff();
   }  
 }
 
@@ -455,9 +514,10 @@ void loop()
       prepareToSleep();
       LowPower.powerDown(sleeptime,ADC_OFF,BOD_OFF);
       digitalWriteFast(5,LOW);
+      interrupts();
 
       clock_prescale_set(clock_div_1); // podczas spania 1mhz -> po pobudce 8
-      uc_state = UC_WAKE_AND_CHECK; // pokimaÅ‚? to sprawdziÄ‡ co sie dzieje->
+      uc_state = UC_WAKE_AND_CHECK; // pokima³? to sprawdziæ co sie dzieje->
       break;
     }
 
@@ -465,14 +525,14 @@ void loop()
     case UC_WAKE_AND_CHECK:
     {
       readValues();                 // odczyt
-      checkPressureTEST();          // compare
+      checkPressure3();             // compare
                 
       if (was_whistled == true)     // zmiana -> wysylamy
       {
         uc_state = UC_SENDING_DATA;
         tx_state = TX_WAKEUP_CMT;
       }
-      else                          // brak zmiany -> sio spaÄ‡ dalej
+      else                          // brak zmiany -> sio spaæ dalej
       {
         uc_state = UC_GO_SLEEP;
       }
@@ -533,5 +593,5 @@ void loop()
       break;
     }
   }
-  //checkTimeout(); // przy poprzednim dmuchnieciu funkcja ruszy 2 razy.. do zrobienia.
+  checkTimeout();
 }
