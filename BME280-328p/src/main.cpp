@@ -17,7 +17,10 @@ bool startup = true;
 period_t sleeptime = SLEEP_120MS;       // domyslny czas snu procesora
 int data_repeat;
 
-//test
+
+/*****************************************************
+ * Przerwania
+ * ***************************************************/
 
 // Ustawia Timer1 na próbkowanie 6250 bps dla transmisji radiowej
 // 160 us polbit / 320 us bit transmisji
@@ -40,7 +43,25 @@ void setupTimer1()
   interrupts();
 }
 
-// Wylacza wszystko do spania
+/*****************************************************
+ * Przerwanie Timer1 - 120 ms
+ * ***************************************************/
+ISR(TIMER1_COMPA_vect) 
+{
+  //transmisjaCMT2110Timer();
+}
+
+/*****************************************************
+ * Przerwanie dla przycisku
+ * ***************************************************/
+void ISR_INT0_vect()
+{
+  ButtonPressed();
+}
+
+/*****************************************************
+ * Wylacza wszystko do spania
+ * ***************************************************/
 void prepareToSleep()
 {
   //clock_prescale_set(clock_div_16);
@@ -57,7 +78,9 @@ void prepareToSleep()
   PORTD &= ~(1 << PD0);   // LOW pin0 CMT2110
 }
 
-// Wylacza sie po nacisnieciu guzila
+/*****************************************************
+ * Wylacza urzadzenie po nacisnieciu guzika
+ * ***************************************************/
 void turnOff()
 {
   prepareToSleep();
@@ -65,18 +88,9 @@ void turnOff()
   uc_state = UC_GO_SLEEP;
 }
 
-// Przerwanie Timer1 120 ms
-ISR(TIMER1_COMPA_vect) 
-{
-  //transmisjaCMT2110Timer();
-}
-
-// Przerwanie dla przycisku
-void ISR_INT0_vect()
-{
-  ButtonPressed();
-}
-
+/*****************************************************
+ * Obsluga przycisku
+ * ***************************************************/
 void ButtonPressed()
 {
   digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
@@ -97,7 +111,10 @@ void ButtonPressed()
   }
 }
 
-// Przygotowuje RAMKE danych do odbiornika
+
+/*****************************************************
+ * Przygotowuje RAMKE danych do odbiornika
+ * ***************************************************/
 void makeMsg()
 {
   // const char *msg = "1010010100000000000000001010000101000110";
@@ -169,8 +186,12 @@ void makeMsg()
 		}
 }
 
-//  Transmisja danych z pilota do odbiornika zgodnie z dokumentacja ELMAK na ukladzie CMT2110A z predkoscia 6250bps
-//  Kodowanie bifazowe, czas pó³bitu 160us
+
+/*****************************************************
+ * Transmisja danych z pilota do odbiornika zgodnie z 
+ * dokumentacja ELMAK na ukladzie CMT2110A z predkoscia 6250bps
+ * Kodowanie bifazowe, czas pó³bitu 160us
+ * ***************************************************/
 void transmisjaCMT2110Timer()
 {
   if(BitNr <= 40) // jesli ramka do zrobienia
