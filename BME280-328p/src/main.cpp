@@ -10,6 +10,8 @@ bool startup = true;
 period_t sleeptime = SLEEP_120MS;       // domyslny czas snu procesora
 int data_repeat;
 
+//test
+
 
 // Ustawia Timer1 na próbkowanie 6250 bps dla transmisji radiowej
 // 160 us polbit / 320 us bit transmisji
@@ -41,7 +43,7 @@ void prepareToSleep()
 
   power_adc_disable(); // ADC converter
   power_spi_disable(); // SPI
-  power_usart0_disable();// Serial (USART)
+  //power_usart0_disable();// Serial (USART) test
   //power_timer0_disable();// TIMER 0 SLEEP WDT ...
   power_timer1_disable();// Timer 1
   power_timer2_disable();// Timer 2
@@ -52,7 +54,7 @@ void prepareToSleep()
 // Przerwanie Timer1 120 ms
 ISR(TIMER1_COMPA_vect) 
 {
-  transmisjaCMT2110Timer();
+  //transmisjaCMT2110Timer();
 }
 
 // Przerwanie dla przycisku
@@ -176,12 +178,16 @@ void transmisjaCMT2110Timer()
  * ***************************************************/
 void setup() 
 {
+  //test
+    Serial.begin(9600);	// Debugging only
+  //test
+
   clock_prescale_set(clock_div_1);
 
   ADCSRA &= ~(1 << 7); // TURN OFF ADC CONVERTER
   power_adc_disable(); // ADC converter
   //power_spi_disable(); // SPI
-  power_usart0_disable();// Serial (USART)
+  //power_usart0_disable();// Serial (USART)
   //power_timer0_disable();// TIMER 0 SLEEP WDT ...
   power_timer1_disable();// Timer 1 - I2C...
   power_timer2_disable();// Timer 2
@@ -206,7 +212,7 @@ void setup()
   pinModeFast(USER_SWITCH,INPUT);
   digitalWriteFast(LED_PIN, LOW);  // LED OFF
   digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
-  digitalWriteFast(TRANSMISION_PIN, LOW);    // RF433
+  //digitalWriteFast(TRANSMISION_PIN, LOW);    // RF433
 
   pinModeFast(SS,OUTPUT);
   pinModeFast(MOSI,OUTPUT);
@@ -227,7 +233,7 @@ void setup()
   setupTimer1();              // Ustawia timer1
   power_timer1_disable(); // Timer 1 - I2C...
   
-  attachInterrupt(digitalPinToInterrupt(2), ISR_INT0_vect, RISING);
+  //attachInterrupt(digitalPinToInterrupt(2), ISR_INT0_vect, RISING);
 
   startup = false;
   was_whistled = false;
@@ -270,6 +276,44 @@ void readValuesStartup()
  * ***************************************************/
 void readValues() 
 {
+
+  // odczyt z BME do floata wyglada tak:
+  // 94995.00
+  // wobec tego SENSE val to tak na prawde dziesietne i setne
+  // nacisniecie:
+  // po nacisnieciu nastepuje wzrost -> spadek -> i powolny wzrost do normalnych odczytow
+  // wzrost o ok 5-6 hpa, spadek o ok 7-8 (ok 3 ponizej wart sprzed nacisniecia) i wzrost trwajacy ok 10-15s - 30-45s.
+  //
+  // dmuchniecie:
+  /*
+    95051.00
+    95051.00
+    95168.00
+    95848.00 dmuch
+    94718.00 spadek
+    94684.00
+    94731.00
+    94778.00  powolny wzrost
+    94815.00
+    94855.00
+    94879.00
+    94895.00
+    94914.00
+    94930.00
+    94940.00
+    94946.00
+    94954.00
+    94964.00
+    94970.00
+    94972.00
+    94980.00
+    94980.00
+    */
+  // 
+  // wahania w czasie odczytow co 200ms:
+  // np. 95152.00 -> 30s. -> 95240.00 -> 60s -> 95125.00 -> 
+
+
   //prev_press = press_odczyt; // nie potrzebne?
 
   pinModeFast(SS,OUTPUT);   // Ustaw piny SPI jako OUTPUT na czas pomiaru
@@ -282,6 +326,10 @@ void readValues()
   bme1.setMode(11);
 
   press_odczyt = bme1.readFixedPressure();  // Odczyt z czujnika bme
+  //test
+  Serial.begin(9600);
+  delay(5);
+  Serial.println(press_odczyt);
 
   bme1.setMode(00);
   bme1.end();
@@ -360,6 +408,10 @@ void checkPressureTEST()
 
 }
 
+void checkPressure3()
+{
+  
+}
 /*****************************************************
  * TEST - TIMEOUT
  * ***************************************************/
@@ -382,8 +434,8 @@ void checkTimeout()
     sleeptime = SLEEP_1S; // 1S
     //sleeptime = SLEEP_FOREVER;
     // setup ISR to WAKE UP!
-    power_twi_disable();
-    power_usart0_disable();
+    //power_twi_disable();
+    //power_usart0_disable();
   }  
 }
 
@@ -397,12 +449,12 @@ void loop()
     // Idz spac w pizdu.
     case UC_GO_SLEEP:
     {
-      //delay(10);
-      //digitalWriteFast(5, HIGH);
+      delay(10);
+      digitalWriteFast(5, HIGH);
       //checkTimeout();
       prepareToSleep();
       LowPower.powerDown(sleeptime,ADC_OFF,BOD_OFF);
-      //digitalWriteFast(5,LOW);
+      digitalWriteFast(5,LOW);
 
       clock_prescale_set(clock_div_1); // podczas spania 1mhz -> po pobudce 8
       uc_state = UC_WAKE_AND_CHECK; // pokimał? to sprawdzić co sie dzieje->
@@ -432,9 +484,9 @@ void loop()
     {
       if(tx_state == TX_WAKEUP_CMT)
       {
-        digitalWriteFast(TRANSMISION_PIN,HIGH); // wybudzenie CMT2110
-        delayMicroseconds(100); //
-        digitalWriteFast(TRANSMISION_PIN,LOW); // wybudzenie CMT2110
+        //digitalWriteFast(TRANSMISION_PIN,HIGH); // wybudzenie CMT2110
+        //delayMicroseconds(100); //
+        //digitalWriteFast(TRANSMISION_PIN,LOW); // wybudzenie CMT2110
         delay(4);
         tx_state = TX_SENDING_START;
       }
@@ -450,6 +502,9 @@ void loop()
       else if(tx_state == TX_SENDING_PROGRESS)
       {
         // just wait for all bits to be sent..
+        // test 
+                      tx_state = TX_SENDING_REPEAT;
+                      power_timer1_disable();
       }
       else if(tx_state == TX_SENDING_REPEAT) // POWTARZAMY RAMKE (min 3x)
       {

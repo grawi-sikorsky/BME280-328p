@@ -19,8 +19,8 @@
 
 // KONFIGURACJA
 #define PRESS_ATM_PROBE_COUNT 10
-#define SENSE_VALUE     100
-#define SENSE_LOW_VALUE 40      
+#define SENSE_VALUE     80
+#define SENSE_LOW_VALUE 35      
 
 #define SENSE_WHISTLED  5             // +/- widelki podczas wykrycia dmuchniecia
 #define VACUUM_IGNORE   1     
