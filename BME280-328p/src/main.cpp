@@ -11,7 +11,8 @@ bool was_whistled = false;              // flaga dmuchniete czy nie
 bool na_minusie = false;
 
 bool btn_pressed = false;
-bool device_Off = false;
+bool device_is_off = false;
+bool delegate_to_longsleep = false;
 
 bool startup = true;
 period_t sleeptime = SLEEP_120MS;       // domyslny czas snu procesora
@@ -79,16 +80,6 @@ void prepareToSleep()
 }
 
 /*****************************************************
- * Wylacza urzadzenie po nacisnieciu guzika
- * ***************************************************/
-void turnOff()
-{
-  prepareToSleep();
-  sleeptime = SLEEP_FOREVER;
-  uc_state = UC_GO_SLEEP;
-}
-
-/*****************************************************
  * Obsluga przycisku
  * ***************************************************/
 void ButtonPressed()
@@ -97,17 +88,18 @@ void ButtonPressed()
 
   //btn_last = millis();  // pobierz czas.
 
-  if(device_Off == true)  // je¶li urzadzenie jest wylaczone
+  if(device_is_off == true)  // je¶li urzadzenie jest wylaczone
   { 
     // w³±cz
-    device_Off = false;
+    delegate_to_longsleep = false;
+    device_is_off = false;
     uc_state = UC_WAKE_AND_CHECK;
   }
   else                    // je¶li w³±czone
   {
     //wy³±cz
-    device_Off = true;
-    turnOff();
+    device_is_off = true;
+    delegate_to_longsleep = true;
   }
 }
 
@@ -500,9 +492,9 @@ void checkTimeout()
 {
   current_positive = millis();  // pobierz czas.
   current_timeout = current_positive - last_positive;
-  Serial.print("CurrentPos: "); Serial.println(current_positive);
-  Serial.print("CurrentTO: "); Serial.println(current_timeout);
-  Serial.print("LastPos: "); Serial.println(last_positive);
+  //Serial.print("CurrentPos: "); Serial.println(current_positive);
+  //Serial.print("CurrentTO: "); Serial.println(current_timeout);
+  //Serial.print("LastPos: "); Serial.println(last_positive);
 
   if(current_timeout > TIME_TO_WAIT_MS && current_timeout < TIMEOUT_1) // pierwszy prog
   {
@@ -515,7 +507,8 @@ void checkTimeout()
   } 
   else if(current_timeout > TIMEOUT_2 )
   { 
-    turnOff();
+    delegate_to_longsleep = true;
+    sleeptime = SLEEP_FOREVER;
   }  
 }
 
@@ -531,13 +524,23 @@ void loop()
     {
       delay(10);
       digitalWriteFast(5, HIGH);
-      //checkTimeout();
-      prepareToSleep();
-      LowPower.powerDown(sleeptime,ADC_OFF,BOD_OFF);
-      digitalWriteFast(5,LOW);
-      interrupts();
 
+      if(delegate_to_longsleep == true) // idzie w kimono kompletnie do czasu wybudzenia przyciskiem
+      {
+        // idziesz w glebokie kimonko
+        prepareToSleep();
+      }
+      else
+      {
+        // idziesz w krotkie kimonko
+        prepareToSleep();
+      }
+      
+      LowPower.powerDown(sleeptime,ADC_OFF,BOD_OFF);
+
+      digitalWriteFast(5,LOW);
       clock_prescale_set(clock_div_1); // podczas spania 1mhz -> po pobudce 8
+      interrupts();
       uc_state = UC_WAKE_AND_CHECK; // pokima³? to sprawdziæ co sie dzieje->
       break;
     }
