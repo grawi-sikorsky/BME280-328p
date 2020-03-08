@@ -100,6 +100,7 @@ void ButtonPressed()
     //wy³±cz
     device_is_off = true;
     delegate_to_longsleep = true;
+    sleeptime = SLEEP_FOREVER;
   }
 }
 
@@ -243,10 +244,6 @@ void setup()
     pinModeFast(i, OUTPUT);    // changed as per below
     digitalWriteFast(i, LOW);  //     ditto
   }
-  //pinModeFast(0,OUTPUT);
-  //pinModeFast(1,OUTPUT);
-  //digitalWriteFast(0, HIGH);
-  //digitalWriteFast(1, HIGH);
 
   pinModeFast(LED_PIN,OUTPUT);
   pinModeFast(SPEAKER_PIN,OUTPUT);
@@ -270,12 +267,12 @@ void setup()
   readValues();               // pierwsze pobranie wartosci - populacja zmiennych
   prev_press = press_odczyt; // jednorazowe na poczatku w setup
 
-  makeMsg();                  // Przygotowuje ramke danych
-
   setupTimer1();              // Ustawia timer1
   power_timer1_disable(); // Timer 1 - I2C...
+
+  makeMsg();                  // Przygotowuje ramke danych
   
-  //attachInterrupt(digitalPinToInterrupt(2), ISR_INT0_vect, RISING);
+  attachInterrupt(digitalPinToInterrupt(2), ISR_INT0_vect, RISING);
 
   startup = false;
   was_whistled = false;
@@ -529,13 +526,14 @@ void loop()
       {
         // idziesz w glebokie kimonko
         prepareToSleep();
+        device_is_off = true;
       }
       else
       {
         // idziesz w krotkie kimonko
         prepareToSleep();
       }
-      
+
       LowPower.powerDown(sleeptime,ADC_OFF,BOD_OFF);
 
       digitalWriteFast(5,LOW);
