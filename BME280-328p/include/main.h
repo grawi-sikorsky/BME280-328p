@@ -25,6 +25,7 @@
 #define SENSE_WHISTLED  5             // +/- widelki podczas wykrycia dmuchniecia
 #define VACUUM_IGNORE   1     
 
+#define SWITCH_TIMEOUT  1000  // czas przycisku nacisniecia
 #define TIME_TO_WAIT_MS 50              // czas do nastepnego wyzwolenia
 #define TIMEOUT_1       1800000       // pierwszy timeiut // realnie wychodzi jakies (1 800 000 ms = 30 min)
 #define TIMEOUT_2       3600000       // drugi prog = 5 400 000 = 90 min // z uwagi na sleep-millis: 60 min
@@ -40,6 +41,7 @@ void checkPressureTEST();
 void checkTimeout();  // sprawdzenie czasu
 void transmisjaCMT2110Timer();
 
+void CheckButtonState();
 void ButtonPressed();
 void TurnOff();
 
@@ -62,6 +64,7 @@ enum uc_State {
   UC_WAKE_AND_CHECK = 1,
   UC_SENDING_DATA = 2,
   UC_SENDING_DONE = 3,
+  UC_BTN_CHECK  = 4,
 };
 enum transmission_State {
   TX_WAKEUP_CMT = 0,
