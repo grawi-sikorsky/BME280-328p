@@ -4,13 +4,16 @@ float press_odczyt, prev_press;
 float press_otoczenia;
 float press_dmuch;
 
+bool was_whistled = false;              // flaga dmuchniete czy nie
+bool na_minusie = false;
+int press_down_cnt = 0;
+
 time_t current_positive, last_positive, current_timeout; // czas ostatniego dmuchniecia
 time_t btn_current, btn_pressed_at, btn_timeout;
 
-bool was_whistled = false;              // flaga dmuchniete czy nie
-bool na_minusie = false;
+bool btn_state = LOW;
+bool btn_last_state = LOW;
 
-bool btn_pressed = false;
 bool device_is_off = false;
 bool delegate_to_longsleep = false;
 
@@ -89,45 +92,30 @@ void prepareToSleep()
  * ***************************************************/
 void ButtonPressed()
 {
-  digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
-
   if(device_is_off == true)  // jesli urzadzenie jest wylaczone
   { 
     btn_pressed_at = millis();
 
     // wlacz
     uc_state = UC_BTN_CHECK;
-
-    //delegate_to_longsleep = false;
-    //device_is_off = false;
-    //uc_state = UC_WAKE_AND_CHECK;
-    btn_pressed = true;
-
-    detachInterrupt(digitalPinToInterrupt(2));
-  }
-  else                    // jesli urzadzenie wlaczone
-  {
-    //wylacz
-    //device_is_off = true;
-    //delegate_to_longsleep = true;
-    //attachInterrupt(digitalPinToInterrupt(2), ISR_INT0_vect, RISING);
+    //btn_state = true;
   }
 }
 void checktest()
 {
-  if(btn_pressed == true)
+  if(btn_state == true)
   {
     digitalWriteFast(LED_PIN, HIGH);
     delay(500);
     digitalWriteFast(LED_PIN, LOW);
-    btn_pressed = false;
+    btn_state = false;
   }
 }
 void CheckButtonState()
 {
-  btn_pressed = digitalReadFast(USER_SWITCH);
+  btn_state = digitalReadFast(USER_SWITCH);
 
-  if(btn_pressed == true)
+  if(btn_state == true)
   {
     btn_current = millis();
 
@@ -330,7 +318,7 @@ void setup()
 
   makeMsg();                  // Przygotowuje ramke danych
   
-  attachInterrupt(digitalPinToInterrupt(2), ISR_INT0_vect, RISING);
+  //attachInterrupt(digitalPinToInterrupt(2), ISR_INT0_vect, RISING);
 
   startup = false;
   was_whistled = false;
@@ -497,10 +485,11 @@ void checkPressure3()
   {
     last_positive = millis();
 
-    if(press_odczyt > prev_press + SENSE_VALUE)   // jesli jest wiecej niz wartosc graniczna
+    if(press_odczyt >= prev_press + SENSE_VALUE)   // jesli jest wiecej niz wartosc graniczna
     { // tu jest blad bo jesli bedzie podcisnienie 800hpa i trafi do prev to zawsze
     // bedzie true-> wiec swieci!
       was_whistled = true;
+      press_down_cnt = 0;
       #ifdef DEBUGMODE
       Serial.print("isT setT; "); Serial.print("NOW: "); Serial.print(press_odczyt); Serial.print(" WAS: "); Serial.print(prev_press); Serial.print(" S: ");Serial.print(press_odczyt-prev_press); Serial.println(" laaa");
       #endif
@@ -508,6 +497,7 @@ void checkPressure3()
     else if(press_odczyt >= press_dmuch - SENSE_WHISTLED)
     {
       was_whistled = true;
+      press_down_cnt = 0;
       #ifdef DEBUGMODE
       Serial.print("isT setT; "); Serial.print("NOW: "); Serial.print(press_odczyt); Serial.print(" DMU: "); Serial.print(press_dmuch); Serial.print(" S: ");Serial.print(press_odczyt-prev_press); Serial.println(" laaa");
       #endif
@@ -516,7 +506,15 @@ void checkPressure3()
     {
      //prev_press = press_odczyt; // musi byc tutaj aby zapobiec 1000->800
                                 // malo bezpieczne gdyby np. odczyt nie byl srednia atmosferyczna
-      was_whistled = false;
+      // nowe: podwojne sprawdzanie
+      // wylaczy dopiero po drugim cyklu
+      press_down_cnt++;
+      if(press_down_cnt > 1)
+      {
+        was_whistled = false;
+        press_down_cnt = 0;
+      }
+      
       #ifdef DEBUGMODE
       Serial.print("isT setF; "); Serial.print("NOW: "); Serial.print(press_odczyt); Serial.print(" WAS: "); Serial.print(prev_press); Serial.print(" S: ");Serial.print(press_odczyt-prev_press); Serial.println(" laaa");
       #endif
@@ -524,7 +522,7 @@ void checkPressure3()
   }
   else  // gdy w poprzednim cyklu dmuchane nie by�o
   {
-    if((press_odczyt > prev_press + SENSE_VALUE) && na_minusie == false)// && !(prev_press < press_odczyt - SENSE_VALUE))   // je�li nowy odczyt jest wiekszy o SENSE_VALUE od poprzedniego ->
+    if((press_odczyt > prev_press + SENSE_VALUE) && na_minusie == false)
     {
       was_whistled = true;
       press_dmuch = press_odczyt;
@@ -688,33 +686,56 @@ void loop()
 
     case UC_BTN_CHECK:
     {
-      btn_pressed = digitalReadFast(USER_SWITCH);
       delegate_to_longsleep = false; // inaczej pojdzie spac long
+      btn_state = digitalReadFast(USER_SWITCH); // odczyt stanu guzika
+      
+      btn_current = millis();
 
-      if(btn_pressed == false)
+      if(btn_state == LOW)
       {
-          digitalWriteFast(LED_PIN,HIGH);
-          delay(10);
-          digitalWriteFast(LED_PIN,LOW);
+        btn_pressed_at = btn_current;
+      }
+
+      // jesli przycisk nie jest wcisniety gdy urzadzenie pracuje -> loop
+      if(btn_state == false && device_is_off == false)
+      {
+        //digitalWriteFast(LED_PIN,HIGH);
+        //delay(10);
+        //digitalWriteFast(LED_PIN,LOW);
+
+        btn_pressed_at = btn_current;
         // od razu w krotka kime
         uc_state = UC_GO_SLEEP;
         break;
       }
 
-      if(btn_pressed == true && device_is_off == true) // jesli guzik + nadajnik off
+      // jesli sie obudzi po przerwaniu a przycisk juz nie jest wcisniety -> deepsleep
+      if(btn_state == false && device_is_off == true)
+      {
+        device_is_off = true;           // flaga off
+        delegate_to_longsleep = true;   // deleguj do glebokiego snu
+        uc_state = UC_GO_SLEEP;
+      }
+
+      // jelsi przycisk wcisniety gdy urzadzenie bylo wylaczone:
+      if(btn_state == true && device_is_off == true) // jesli guzik + nadajnik off
       {
         btn_current = millis();
         if(btn_current - btn_pressed_at >= SWITCH_TIMEOUT)
         {
-          //btn_pressed_at = btn_current;
+          btn_pressed_at = btn_current;
           digitalWriteFast(LED_PIN,HIGH);
           delay(1000);
           digitalWriteFast(LED_PIN,LOW);
           //wakeup
+          device_is_off = false;
+          detachInterrupt(digitalPinToInterrupt(2));
           uc_state = UC_WAKE_AND_CHECK;
         }
       }
-      else if(btn_pressed == true && device_is_off == false) // guzik + nadajnik ON
+
+      // jesli przycisk wcisniety lecz urzadzenie pracuje normalnie:
+      else if(btn_state == true && device_is_off == false) // guzik + nadajnik ON
       {
         btn_current = millis();
         if(btn_current - btn_pressed_at >= SWITCH_TIMEOUT)
@@ -737,6 +758,7 @@ void loop()
         // yyyyy...
       }
 
+      btn_last_state = btn_state;
       break;
     }
   }

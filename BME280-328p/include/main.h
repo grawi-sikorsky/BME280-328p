@@ -19,13 +19,13 @@
 
 // KONFIGURACJA
 #define PRESS_ATM_PROBE_COUNT 10
-#define SENSE_VALUE     80
-#define SENSE_LOW_VALUE 35      
+#define SENSE_VALUE     85
+#define SENSE_LOW_VALUE 25      
 
-#define SENSE_WHISTLED  5             // +/- widelki podczas wykrycia dmuchniecia
+#define SENSE_WHISTLED  15             // +/- widelki podczas wykrycia dmuchniecia
 #define VACUUM_IGNORE   1     
 
-#define SWITCH_TIMEOUT  1000  // czas przycisku nacisniecia
+#define SWITCH_TIMEOUT  3000  // czas przycisku nacisniecia
 #define TIME_TO_WAIT_MS 50              // czas do nastepnego wyzwolenia
 #define TIMEOUT_1       1800000       // pierwszy timeiut // realnie wychodzi jakies (1 800 000 ms = 30 min)
 #define TIMEOUT_2       3600000       // drugi prog = 5 400 000 = 90 min // z uwagi na sleep-millis: 60 min
