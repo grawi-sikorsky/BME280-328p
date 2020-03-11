@@ -101,6 +101,11 @@ void ButtonPressed()
     //btn_state = true;
   }
 }
+
+void softReset(){
+  asm volatile ("  jmp 0");
+}
+
 void checktest()
 {
   if(btn_state == true)
@@ -720,7 +725,7 @@ void loop()
       // jelsi przycisk wcisniety gdy urzadzenie bylo wylaczone:
       if(btn_state == true && device_is_off == true) // jesli guzik + nadajnik off
       {
-        btn_current = millis();
+        //btn_current = millis();
         if(btn_current - btn_pressed_at >= SWITCH_TIMEOUT)
         {
           btn_pressed_at = btn_current;
@@ -734,10 +739,10 @@ void loop()
         }
       }
 
-      // jesli przycisk wcisniety lecz urzadzenie pracuje normalnie:
+      // jesli przycisk wcisniety a urzadzenie pracuje normalnie:
       else if(btn_state == true && device_is_off == false) // guzik + nadajnik ON
       {
-        btn_current = millis();
+        //btn_current = millis();
         if(btn_current - btn_pressed_at >= SWITCH_TIMEOUT)
         {
           // spij
@@ -752,10 +757,18 @@ void loop()
           digitalWriteFast(LED_PIN,LOW);
           uc_state = UC_GO_SLEEP;
         }
+
+        // dodatkowo tutaj reset po przytrzymaniu 2s.
       }
       else
       {
         // yyyyy...
+      }
+
+      // soft reset 2s.
+      if(btn_state == true && device_is_off == false)
+      {
+
       }
 
       btn_last_state = btn_state;
