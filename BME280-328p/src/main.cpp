@@ -10,7 +10,9 @@ int press_down_cnt = 0;
 
 time_t current_positive, last_positive, current_timeout; // czas ostatniego dmuchniecia
 time_t btn_current, btn_pressed_at, btn_timeout;
-time_t last_blink;
+
+time_t last_blink;      // czas ostatniego blinka diody led
+time_t current_time;    // aktualny czas tu� po wybudzeniu
 
 bool btn_state = LOW;
 bool btn_last_state = LOW;
@@ -488,6 +490,8 @@ void checkTimeout()
   current_positive = millis();  // pobierz czas.
   current_timeout = current_positive - last_positive;
 
+  current_timeout = current_time - last_positive;
+
   if(current_timeout > TIME_TO_WAIT_MS && current_timeout < TIMEOUT_1) // pierwszy prog
   {
     sleeptime = SLEEP_120MS;
@@ -542,19 +546,30 @@ void loop()
     }
 
     // Pobudka i sprawdzamy czujnik
+    // Blinki itp
     case UC_WAKE_AND_CHECK:
     {
       readValues();                 // odczyt
       checkPressure3();             // compare
+      current_time = millis();
                 
       if (was_whistled == true)     // zmiana -> wysylamy
       {
         uc_state = UC_SENDING_DATA;
         tx_state = TX_WAKEUP_CMT;
       }
-      else                          // brak zmiany -> sio spa� dalej
+      else                          // brak zmiany -> sio spac dalej
       {
         uc_state = UC_BTN_CHECK;
+
+        // blink
+        if(current_time - last_blink >= 200)
+        {
+          last_blink = current_time;
+          digitalWriteFast(LED_PIN, HIGH);
+          delay(10);
+          digitalWriteFast(LED_PIN, LOW);
+        } 
       }
       break;
     }
@@ -625,27 +640,18 @@ void loop()
                                       // nadajnik był wybudzony czy pracowal normalnie
       btn_state = digitalReadFast(USER_SWITCH); // odczyt stanu guzika
       
-      btn_current = millis();
-
-      
-      if(btn_current - last_blink >= 200)
-      {
-        last_blink = btn_current;
-        digitalWriteFast(LED_PIN, HIGH);
-        delay(10);
-        digitalWriteFast(LED_PIN, LOW);
-      } 
+      //current_time = millis();
 
       if(btn_state == LOW) // jeśli przycisk nie jest wcisniety lub zostal zwolniony
       {
-        btn_pressed_at = btn_current; // ustaw obecny czas
+        btn_pressed_at = current_time; // ustaw obecny czas
         // jesli przycisk zostanie nacisniety ostatnia wartość stad nie bedzie nadpisywana
       }
 
       // jesli przycisk nie jest wcisniety gdy urzadzenie pracuje -> loop
       if(btn_state == false && device_is_off == false)
       {
-        btn_pressed_at = btn_current; // to wlasciwie mozna usunac na rzecz tego na gorze?
+        btn_pressed_at = current_time; // to wlasciwie mozna usunac na rzecz tego na gorze?
         // i od razu w krotka kime
         uc_state = UC_GO_SLEEP;
         break;
@@ -662,9 +668,9 @@ void loop()
       // jesli przycisk wcisniety gdy urzadzenie bylo wylaczone:
       if(btn_state == true && device_is_off == true) // jesli guzik + nadajnik off
       {
-        if(btn_current - btn_pressed_at >= SWITCH_TIMEOUT)
+        if(current_time - btn_pressed_at >= SWITCH_TIMEOUT)
         {
-          btn_pressed_at = btn_current;
+          btn_pressed_at = current_time;
           digitalWriteFast(LED_PIN,HIGH);
           delay(1000);
           digitalWriteFast(LED_PIN,LOW);
@@ -678,7 +684,7 @@ void loop()
       // jesli przycisk wcisniety a urzadzenie pracuje normalnie:
       else if(btn_state == true && device_is_off == false) // guzik + nadajnik ON
       {
-        if(btn_current - btn_pressed_at >= SWITCH_TIMEOUT)
+        if(current_time - btn_pressed_at >= SWITCH_TIMEOUT)
         {
           // spij
           device_is_off = true;
@@ -692,7 +698,7 @@ void loop()
           digitalWriteFast(LED_PIN,LOW);
           uc_state = UC_GO_SLEEP;
         }
-        else if(btn_current - btn_pressed_at >= SW_RST_TIMEOUT)  // jesli przycisniecie bylo krotkie tylko gdy urzadzenie wlaczone
+        else if(current_time - btn_pressed_at >= SW_RST_TIMEOUT)  // jesli przycisniecie bylo krotkie tylko gdy urzadzenie wlaczone
         {
           digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
           delay(100);
