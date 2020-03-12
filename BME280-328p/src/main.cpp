@@ -105,7 +105,10 @@ void prepareToSleep()
  * SW reset - dont reset peripherials
  * ***************************************************/
 void softReset(){
-  asm volatile ("  jmp 0");
+  //asm volatile ("  jmp 0");
+  cli(); //irq's off
+  wdt_enable(WDTO_250MS); //wd on,15ms
+  while(1); //loop
 }
 
 /*****************************************************
@@ -228,6 +231,11 @@ void setup()
   #endif
 
   clock_prescale_set(clock_div_1);
+  
+  // wylacz WDT
+  MCUSR= 0 ;
+  WDTCSR |= _BV(WDCE) | _BV(WDE);
+  WDTCSR = 0;
 
   ADCSRA &= ~(1 << 7); // TURN OFF ADC CONVERTER
   power_adc_disable(); // ADC converter
@@ -630,15 +638,14 @@ void loop()
       // jesli sie obudzi po przerwaniu a przycisk juz nie jest wcisniety -> deepsleep
       if(btn_state == false && device_is_off == true)
       {
-        device_is_off = true;           // flaga off
+        device_is_off = true;           // flaga off dla pewnosci
         delegate_to_longsleep = true;   // deleguj do glebokiego snu
         uc_state = UC_GO_SLEEP;
       }
 
-      // jelsi przycisk wcisniety gdy urzadzenie bylo wylaczone:
+      // jesli przycisk wcisniety gdy urzadzenie bylo wylaczone:
       if(btn_state == true && device_is_off == true) // jesli guzik + nadajnik off
       {
-        //btn_current = millis();
         if(btn_current - btn_pressed_at >= SWITCH_TIMEOUT)
         {
           btn_pressed_at = btn_current;
@@ -655,7 +662,6 @@ void loop()
       // jesli przycisk wcisniety a urzadzenie pracuje normalnie:
       else if(btn_state == true && device_is_off == false) // guzik + nadajnik ON
       {
-        //btn_current = millis();
         if(btn_current - btn_pressed_at >= SWITCH_TIMEOUT)
         {
           // spij
@@ -670,21 +676,30 @@ void loop()
           digitalWriteFast(LED_PIN,LOW);
           uc_state = UC_GO_SLEEP;
         }
+        else if(btn_current - btn_pressed_at >= SW_RST_TIMEOUT)  // jesli przycisniecie bylo krotkie tylko gdy urzadzenie wlaczone
+        {
+          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+          delay(100);
+          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+          delay(100);
+          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+          delay(100);
+          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+          delay(100);
+          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+          delay(100);
+          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+          delay(100);
 
-        // dodatkowo tutaj reset po przytrzymaniu 2s.
+          softReset();
+        }
       }
       else
       {
         // yyyyy...
       }
 
-      // soft reset 2s.
-      if(btn_state == true && device_is_off == false)
-      {
-
-      }
-
-      btn_last_state = btn_state;
+      btn_last_state = btn_state; // juz nieptrzebne?
       break;
     }
   }
