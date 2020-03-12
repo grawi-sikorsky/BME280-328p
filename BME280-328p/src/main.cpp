@@ -10,6 +10,7 @@ int press_down_cnt = 0;
 
 time_t current_positive, last_positive, current_timeout; // czas ostatniego dmuchniecia
 time_t btn_current, btn_pressed_at, btn_timeout;
+time_t last_blink;
 
 bool btn_state = LOW;
 bool btn_last_state = LOW;
@@ -280,6 +281,8 @@ void setup()
 
   makeMsg();                  // Przygotowuje ramke danych
 
+  last_blink = millis();
+
   startup = false;
   was_whistled = false;
   uc_state = UC_GO_SLEEP; // default uC state
@@ -501,6 +504,10 @@ void checkTimeout()
   }  
 }
 
+void Blink()
+{
+
+}
 /**************************
  *  LOOP
  * ************************/
@@ -620,6 +627,15 @@ void loop()
       
       btn_current = millis();
 
+      
+      if(btn_current - last_blink >= 200)
+      {
+        last_blink = btn_current;
+        digitalWriteFast(LED_PIN, HIGH);
+        delay(10);
+        digitalWriteFast(LED_PIN, LOW);
+      } 
+
       if(btn_state == LOW) // jeśli przycisk nie jest wcisniety lub zostal zwolniony
       {
         btn_pressed_at = btn_current; // ustaw obecny czas
@@ -698,6 +714,10 @@ void loop()
       {
         // yyyyy...
       }
+
+      Blink();
+
+
 
       btn_last_state = btn_state; // juz nieptrzebne?
       break;

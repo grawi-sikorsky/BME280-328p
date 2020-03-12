@@ -46,6 +46,7 @@ void transmisjaCMT2110Timer();
 void CheckButtonState();
 void ButtonPressed();
 void TurnOff();
+void Blink();
 
 void prepareToSleep();
 void setupTimer1();
