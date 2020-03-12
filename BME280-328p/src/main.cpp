@@ -4,13 +4,17 @@ float press_odczyt, prev_press;
 float press_otoczenia;
 float press_dmuch;
 
-time_t current_positive, last_positive, current_timeout; // czas ostatniego dmuchniecia
-time_t btn_current, btn_last, btn_timeout;
-
 bool was_whistled = false;              // flaga dmuchniete czy nie
 bool na_minusie = false;
+int press_down_cnt = 0;
 
-bool btn_pressed = false;
+time_t current_positive, last_positive, current_timeout; // czas ostatniego dmuchniecia
+time_t btn_current, btn_pressed_at, btn_timeout;
+time_t last_blink;
+
+bool btn_state = LOW;
+bool btn_last_state = LOW;
+
 bool device_is_off = false;
 bool delegate_to_longsleep = false;
 
@@ -18,12 +22,13 @@ bool startup = true;
 period_t sleeptime = SLEEP_120MS;       // domyslny czas snu procesora
 int data_repeat;
 
+//#define DEBUGMODE
 
 /*****************************************************
  * Przerwania
  * ***************************************************/
 
-// Ustawia Timer1 na próbkowanie 6250 bps dla transmisji radiowej
+// Ustawia Timer1 na prï¿½bkowanie 6250 bps dla transmisji radiowej
 // 160 us polbit / 320 us bit transmisji
 void setupTimer1()
 {
@@ -49,7 +54,7 @@ void setupTimer1()
  * ***************************************************/
 ISR(TIMER1_COMPA_vect) 
 {
-  //transmisjaCMT2110Timer();
+  transmisjaCMT2110Timer();
 }
 
 /*****************************************************
@@ -58,6 +63,20 @@ ISR(TIMER1_COMPA_vect)
 void ISR_INT0_vect()
 {
   ButtonPressed();
+}
+
+/*****************************************************
+ * Obsluga przycisku
+ * ***************************************************/
+void ButtonPressed()
+{
+  if(device_is_off == true)  // jesli urzadzenie jest wylaczone
+  { 
+    btn_pressed_at = millis();
+
+    // wlacz i przejdz do sprawdzenia stanu przycisku
+    uc_state = UC_BTN_CHECK;
+  }
 }
 
 /*****************************************************
@@ -71,39 +90,27 @@ void prepareToSleep()
 
   power_adc_disable(); // ADC converter
   power_spi_disable(); // SPI
-  //power_usart0_disable();// Serial (USART) test
+  #ifdef DEBUGMODE
+    power_usart0_disable();// Serial (USART) test
+  #else
+    power_usart0_disable();
+  #endif
   //power_timer0_disable();// TIMER 0 SLEEP WDT ...
-  //power_timer1_disable();// Timer 1
-  //power_timer2_disable();// Timer 2
+  power_timer1_disable();// Timer 1
+  power_timer2_disable();// Timer 2
 
   PORTD &= ~(1 << PD0);   // LOW pin0 CMT2110
 }
 
 /*****************************************************
- * Obsluga przycisku
+ * SW reset - dont reset peripherials
  * ***************************************************/
-void ButtonPressed()
-{
-  digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
-
-  //btn_last = millis();  // pobierz czas.
-
-  if(device_is_off == true)  // je¶li urzadzenie jest wylaczone
-  { 
-    // w³±cz
-    delegate_to_longsleep = false;
-    device_is_off = false;
-    uc_state = UC_WAKE_AND_CHECK;
-  }
-  else                    // je¶li w³±czone
-  {
-    //wy³±cz
-    device_is_off = true;
-    delegate_to_longsleep = true;
-    sleeptime = SLEEP_FOREVER;
-  }
+void softReset(){
+  //asm volatile ("  jmp 0");
+  cli(); //irq's off
+  wdt_enable(WDTO_250MS); //wd on,15ms
+  while(1); //loop
 }
-
 
 /*****************************************************
  * Przygotowuje RAMKE danych do odbiornika
@@ -113,7 +120,7 @@ void makeMsg()
   // const char *msg = "1010010100000000000000001010000101000110";
   /* RAMKA DLA PILOTA
     Checksum = (u8) ([0xA5] + [0] + [0] +  [0xA1]) = 0x46
-    czyli sekwencja pilota dla adresu 0x0000 powinna byæ
+    czyli sekwencja pilota dla adresu 0x0000 powinna byï¿½
     1010 0101 0000 0000 0000 0000 1010 0001 0100 0110
   */
 
@@ -179,11 +186,10 @@ void makeMsg()
 		}
 }
 
-
 /*****************************************************
  * Transmisja danych z pilota do odbiornika zgodnie z 
  * dokumentacja ELMAK na ukladzie CMT2110A z predkoscia 6250bps
- * Kodowanie bifazowe, czas pó³bitu 160us
+ * Kodowanie bifazowe, czas pï¿½bitu 160us
  * ***************************************************/
 void transmisjaCMT2110Timer()
 {
@@ -221,16 +227,21 @@ void transmisjaCMT2110Timer()
  * ***************************************************/
 void setup() 
 {
-  //test
+  #ifdef DEBUGMODE
     Serial.begin(9600);	// Debugging only
-  //test
+  #endif
 
   clock_prescale_set(clock_div_1);
+  
+  // wylacz WDT
+  MCUSR= 0 ;
+  WDTCSR |= _BV(WDCE) | _BV(WDE);
+  WDTCSR = 0;
 
   ADCSRA &= ~(1 << 7); // TURN OFF ADC CONVERTER
   power_adc_disable(); // ADC converter
   //power_spi_disable(); // SPI
-  //power_usart0_disable();// Serial (USART)
+  power_usart0_disable();// Serial (USART)
   //power_timer0_disable();// TIMER 0 SLEEP WDT ...
   power_timer1_disable();// Timer 1 - I2C...
   power_timer2_disable();// Timer 2
@@ -251,7 +262,7 @@ void setup()
   pinModeFast(USER_SWITCH,INPUT);
   digitalWriteFast(LED_PIN, LOW);  // LED OFF
   digitalWriteFast(SPEAKER_PIN, LOW);    // SPK
-  //digitalWriteFast(TRANSMISION_PIN, LOW);    // RF433
+  digitalWriteFast(TRANSMISION_PIN, LOW);    // RF433
 
   pinModeFast(SS,OUTPUT);
   pinModeFast(MOSI,OUTPUT);
@@ -262,54 +273,21 @@ void setup()
   digitalWriteFast(MISO,HIGH);
   digitalWriteFast(SCK,HIGH);
 
-  power_timer1_enable();  // Timer 1 - I2C...
-  readValuesStartup();        
+  power_timer1_enable();  // Timer 1 - I2C...        
   readValues();               // pierwsze pobranie wartosci - populacja zmiennych
   prev_press = press_odczyt; // jednorazowe na poczatku w setup
-
   setupTimer1();              // Ustawia timer1
   power_timer1_disable(); // Timer 1 - I2C...
 
   makeMsg();                  // Przygotowuje ramke danych
-  
-  attachInterrupt(digitalPinToInterrupt(2), ISR_INT0_vect, RISING);
+
+  last_blink = millis();
 
   startup = false;
   was_whistled = false;
   uc_state = UC_GO_SLEEP; // default uC state
 }
 
-/*****************************************************
- * Pobiera dane z czujnika BME280 na poczatku i przypisuje do ogolnego cisnienia
- * ***************************************************/
-void readValuesStartup()
-{
-  pinModeFast(SS,OUTPUT);   // Ustaw piny SPI jako OUTPUT na czas pomiaru
-  pinModeFast(MOSI,OUTPUT); // bardzo niewielka ale zdaje sie jednak oszczednosc prundu
-  pinModeFast(MISO,OUTPUT);
-  pinModeFast(SCK,OUTPUT);
-
-  power_spi_enable();
-  bme1.begin();
-  bme1.setMode(11);
-
-  delay(100);
-  for(int i=1; i <= PRESS_ATM_PROBE_COUNT; i++)
-  {
-    delay(150);
-    press_otoczenia += bme1.readFixedPressure();  // Odczyt z czujnika bme
-  }
-  press_otoczenia = press_otoczenia/PRESS_ATM_PROBE_COUNT;
-
-  bme1.setMode(00);
-  bme1.end();
-  power_spi_disable();
-
-  pinModeFast(SS,INPUT);    // Ustaw piny SPI jako INPUT po pomiarze
-  pinModeFast(MOSI,INPUT);  // bardzo niewielka ale zdaje sie jednak oszczednosc prundu
-  pinModeFast(MISO,INPUT);
-  pinModeFast(SCK,INPUT);
-}
 /*****************************************************
  * Pobiera dane z czujnika BME280
  * ***************************************************/
@@ -391,9 +369,9 @@ void checkPressure()
       was_whistled = false;
     }
   }
-  else  // gdy w poprzednim cyklu dmuchane nie by³o
+  else  // gdy w poprzednim cyklu dmuchane nie byï¿½o
   {
-    if(press_odczyt > prev_press + SENSE_VALUE)   // je¶li nowy odczyt jest wiekszy o SENSE_VALUE od poprzedniego ->
+    if(press_odczyt > prev_press + SENSE_VALUE)   // jeï¿½li nowy odczyt jest wiekszy o SENSE_VALUE od poprzedniego ->
     {
       was_whistled = true;
       press_dmuch = press_odczyt;
@@ -407,7 +385,7 @@ void checkPressure()
 
 void checkPressureTEST()
 {
-  if(was_whistled == false) // nie by³o dmuchniête
+  if(was_whistled == false) // nie byï¿½o dmuchniï¿½te
   {
     if(press_odczyt >= press_otoczenia + SENSE_VALUE)
     {
@@ -419,7 +397,7 @@ void checkPressureTEST()
       was_whistled = false;
     }
   }
-  else // by³o dmuchniête
+  else // byï¿½o dmuchniï¿½te
   {
     if(press_odczyt <= press_otoczenia + SENSE_LOW_VALUE )
     {
@@ -439,37 +417,57 @@ void checkPressure3()
   {
     last_positive = millis();
 
-    if(press_odczyt > prev_press + SENSE_VALUE)   // jesli jest wiecej niz wartosc graniczna
+    if(press_odczyt >= prev_press + SENSE_VALUE)   // jesli jest wiecej niz wartosc graniczna
     { // tu jest blad bo jesli bedzie podcisnienie 800hpa i trafi do prev to zawsze
     // bedzie true-> wiec swieci!
       was_whistled = true;
+      press_down_cnt = 0;
+      #ifdef DEBUGMODE
       Serial.print("isT setT; "); Serial.print("NOW: "); Serial.print(press_odczyt); Serial.print(" WAS: "); Serial.print(prev_press); Serial.print(" S: ");Serial.print(press_odczyt-prev_press); Serial.println(" laaa");
+      #endif
     }
     else if(press_odczyt >= press_dmuch - SENSE_WHISTLED)
     {
       was_whistled = true;
+      press_down_cnt = 0;
+      #ifdef DEBUGMODE
       Serial.print("isT setT; "); Serial.print("NOW: "); Serial.print(press_odczyt); Serial.print(" DMU: "); Serial.print(press_dmuch); Serial.print(" S: ");Serial.print(press_odczyt-prev_press); Serial.println(" laaa");
+      #endif
     }
     else
     {
      //prev_press = press_odczyt; // musi byc tutaj aby zapobiec 1000->800
                                 // malo bezpieczne gdyby np. odczyt nie byl srednia atmosferyczna
-      was_whistled = false;
+      // nowe: podwojne sprawdzanie
+      // wylaczy dopiero po drugim cyklu
+      press_down_cnt++;
+      if(press_down_cnt > 1)
+      {
+        was_whistled = false;
+        press_down_cnt = 0;
+      }
+      
+      #ifdef DEBUGMODE
       Serial.print("isT setF; "); Serial.print("NOW: "); Serial.print(press_odczyt); Serial.print(" WAS: "); Serial.print(prev_press); Serial.print(" S: ");Serial.print(press_odczyt-prev_press); Serial.println(" laaa");
+      #endif
     }
   }
-  else  // gdy w poprzednim cyklu dmuchane nie by³o
+  else  // gdy w poprzednim cyklu dmuchane nie byï¿½o
   {
-    if((press_odczyt > prev_press + SENSE_VALUE) && na_minusie == false)// && !(prev_press < press_odczyt - SENSE_VALUE))   // je¶li nowy odczyt jest wiekszy o SENSE_VALUE od poprzedniego ->
+    if((press_odczyt > prev_press + SENSE_VALUE) && na_minusie == false)
     {
       was_whistled = true;
       press_dmuch = press_odczyt;
+      #ifdef DEBUGMODE
       Serial.print("isF setT; "); Serial.print("NOW: "); Serial.print(press_odczyt); Serial.print(" WAS: "); Serial.print(prev_press); Serial.print(" S: ");Serial.print(press_odczyt-prev_press); Serial.println(" laaa");
+      #endif
     }
     else
     {
       was_whistled = false;
+      #ifdef DEBUGMODE
       Serial.print("isF setF; "); Serial.print("NOW: "); Serial.print(press_odczyt); Serial.print(" WAS: "); Serial.print(prev_press); Serial.print(" S: ");Serial.print(press_odczyt-prev_press); Serial.println(" laaa");
+      #endif
     }
   }
 
@@ -489,9 +487,6 @@ void checkTimeout()
 {
   current_positive = millis();  // pobierz czas.
   current_timeout = current_positive - last_positive;
-  //Serial.print("CurrentPos: "); Serial.println(current_positive);
-  //Serial.print("CurrentTO: "); Serial.println(current_timeout);
-  //Serial.print("LastPos: "); Serial.println(last_positive);
 
   if(current_timeout > TIME_TO_WAIT_MS && current_timeout < TIMEOUT_1) // pierwszy prog
   {
@@ -509,6 +504,10 @@ void checkTimeout()
   }  
 }
 
+void Blink()
+{
+
+}
 /**************************
  *  LOOP
  * ************************/
@@ -519,27 +518,26 @@ void loop()
     // Idz spac w pizdu.
     case UC_GO_SLEEP:
     {
-      delay(10);
-      digitalWriteFast(5, HIGH);
+      //delay(5);
+      //digitalWriteFast(5, HIGH);
 
-      if(delegate_to_longsleep == true) // idzie w kimono kompletnie do czasu wybudzenia przyciskiem
+      // idzie w kimono kompletnie do czasu wybudzenia przyciskiem
+      if(delegate_to_longsleep == true) 
       {
-        // idziesz w glebokie kimonko
-        prepareToSleep();
-        device_is_off = true;
+        prepareToSleep(); // wylacza zbedne peryferia na czas snu
+        attachInterrupt(digitalPinToInterrupt(2), ISR_INT0_vect, RISING); // przerwanie sw
+        LowPower.powerDown(SLEEP_FOREVER,ADC_OFF,BOD_OFF);
       }
-      else
+      else  // idziesz w krotkie kimonko
       {
-        // idziesz w krotkie kimonko
         prepareToSleep();
+        LowPower.powerDown(sleeptime,ADC_OFF,BOD_OFF);
       }
 
-      LowPower.powerDown(sleeptime,ADC_OFF,BOD_OFF);
-
-      digitalWriteFast(5,LOW);
+      //digitalWriteFast(5,LOW);
       clock_prescale_set(clock_div_1); // podczas spania 1mhz -> po pobudce 8
       interrupts();
-      uc_state = UC_WAKE_AND_CHECK; // pokima³? to sprawdziæ co sie dzieje->
+      uc_state = UC_WAKE_AND_CHECK; // pokimaï¿½? to sprawdziï¿½ co sie dzieje->
       break;
     }
 
@@ -554,9 +552,9 @@ void loop()
         uc_state = UC_SENDING_DATA;
         tx_state = TX_WAKEUP_CMT;
       }
-      else                          // brak zmiany -> sio spaæ dalej
+      else                          // brak zmiany -> sio spaï¿½ dalej
       {
-        uc_state = UC_GO_SLEEP;
+        uc_state = UC_BTN_CHECK;
       }
       break;
     }
@@ -566,9 +564,9 @@ void loop()
     {
       if(tx_state == TX_WAKEUP_CMT)
       {
-        //digitalWriteFast(TRANSMISION_PIN,HIGH); // wybudzenie CMT2110
-        //delayMicroseconds(100); //
-        //digitalWriteFast(TRANSMISION_PIN,LOW); // wybudzenie CMT2110
+        digitalWriteFast(TRANSMISION_PIN,HIGH); // wybudzenie CMT2110
+        delayMicroseconds(100); //
+        digitalWriteFast(TRANSMISION_PIN,LOW); // wybudzenie CMT2110
         delay(4);
         tx_state = TX_SENDING_START;
       }
@@ -576,17 +574,20 @@ void loop()
       {
         BitNr = 0;
         HalfBit = 0;
-        data_repeat = DATA_REPEAT_CNT;  // ilosc powtorzen
+        data_repeat = DATA_REPEAT_CNT;    // ilosc powtorzen z conf.
         //interrupts();                   // przerwania wlacz
-        power_timer1_enable();          // wlacz timer 6250bps to send data.
-        tx_state = TX_SENDING_PROGRESS; // czekaj na wyslanie 
+        power_timer1_enable();            // wlacz timer1 6250bps to send data.
+        tx_state = TX_SENDING_PROGRESS;   // czekaj na wyslanie 
       }
       else if(tx_state == TX_SENDING_PROGRESS)
       {
         // just wait for all bits to be sent..
-        // test 
-                      tx_state = TX_SENDING_REPEAT;
-                      power_timer1_disable();
+        // funkcja wysylajaca dane w przewaniu po wykonaniu serii 
+        // ustawia flage TX_SENDING_REPEAT..
+        #ifdef DEBUGMODE
+          tx_state = TX_SENDING_REPEAT;
+          power_timer1_disable();
+        #endif
       }
       else if(tx_state == TX_SENDING_REPEAT) // POWTARZAMY RAMKE (min 3x)
       {
@@ -599,9 +600,11 @@ void loop()
           power_timer1_enable();
           tx_state = TX_SENDING_PROGRESS;
         }
-        else// if(data_repeat == 0)
+        else// (data_repeat == 0)
         {
-          //delay(140); // -> delay powinien pojsc tam gdzie wykryte bedzie dalsze dmuchanie
+          //delay(140); // -> delay powinien pojsc tam gdzie wykryte bedzie 
+          //dalsze dmuchanie
+          // nie ma delay gdy sleeptime = 120MS -> robi jednoczesnie za delay.
           uc_state = UC_SENDING_DONE;
           power_timer1_disable();
         }
@@ -611,7 +614,112 @@ void loop()
 
     case UC_SENDING_DONE:
     {
-      uc_state = UC_GO_SLEEP;
+      uc_state = UC_BTN_CHECK;
+      break;
+    }
+
+    case UC_BTN_CHECK: // sprawdza przycisk na koniec petli lub po wybudzeniu
+    {
+      delegate_to_longsleep = false;  // inaczej pojdzie spac long
+                                      // device_is_off pozostaje dla ustalenia czy 
+                                      // nadajnik byÅ‚ wybudzony czy pracowal normalnie
+      btn_state = digitalReadFast(USER_SWITCH); // odczyt stanu guzika
+      
+      btn_current = millis();
+
+      
+      if(btn_current - last_blink >= 200)
+      {
+        last_blink = btn_current;
+        digitalWriteFast(LED_PIN, HIGH);
+        delay(10);
+        digitalWriteFast(LED_PIN, LOW);
+      } 
+
+      if(btn_state == LOW) // jeÅ›li przycisk nie jest wcisniety lub zostal zwolniony
+      {
+        btn_pressed_at = btn_current; // ustaw obecny czas
+        // jesli przycisk zostanie nacisniety ostatnia wartoÅ›Ä‡ stad nie bedzie nadpisywana
+      }
+
+      // jesli przycisk nie jest wcisniety gdy urzadzenie pracuje -> loop
+      if(btn_state == false && device_is_off == false)
+      {
+        btn_pressed_at = btn_current; // to wlasciwie mozna usunac na rzecz tego na gorze?
+        // i od razu w krotka kime
+        uc_state = UC_GO_SLEEP;
+        break;
+      }
+
+      // jesli sie obudzi po przerwaniu a przycisk juz nie jest wcisniety -> deepsleep
+      if(btn_state == false && device_is_off == true)
+      {
+        device_is_off = true;           // flaga off dla pewnosci
+        delegate_to_longsleep = true;   // deleguj do glebokiego snu
+        uc_state = UC_GO_SLEEP;
+      }
+
+      // jesli przycisk wcisniety gdy urzadzenie bylo wylaczone:
+      if(btn_state == true && device_is_off == true) // jesli guzik + nadajnik off
+      {
+        if(btn_current - btn_pressed_at >= SWITCH_TIMEOUT)
+        {
+          btn_pressed_at = btn_current;
+          digitalWriteFast(LED_PIN,HIGH);
+          delay(1000);
+          digitalWriteFast(LED_PIN,LOW);
+          //wakeup
+          device_is_off = false;
+          detachInterrupt(digitalPinToInterrupt(2));
+          uc_state = UC_WAKE_AND_CHECK;
+        }
+      }
+
+      // jesli przycisk wcisniety a urzadzenie pracuje normalnie:
+      else if(btn_state == true && device_is_off == false) // guzik + nadajnik ON
+      {
+        if(btn_current - btn_pressed_at >= SWITCH_TIMEOUT)
+        {
+          // spij
+          device_is_off = true;
+          delegate_to_longsleep = true;          
+          digitalWriteFast(LED_PIN,HIGH);
+          delay(400);
+          digitalWriteFast(LED_PIN,LOW);
+          delay(400);
+          digitalWriteFast(LED_PIN,HIGH);
+          delay(400);
+          digitalWriteFast(LED_PIN,LOW);
+          uc_state = UC_GO_SLEEP;
+        }
+        else if(btn_current - btn_pressed_at >= SW_RST_TIMEOUT)  // jesli przycisniecie bylo krotkie tylko gdy urzadzenie wlaczone
+        {
+          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+          delay(100);
+          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+          delay(100);
+          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+          delay(100);
+          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+          delay(100);
+          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+          delay(100);
+          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+          delay(100);
+
+          softReset();
+        }
+      }
+      else
+      {
+        // yyyyy...
+      }
+
+      Blink();
+
+
+
+      btn_last_state = btn_state; // juz nieptrzebne?
       break;
     }
   }
