@@ -4,18 +4,21 @@ float press_odczyt, prev_press;
 float press_otoczenia;
 float press_dmuch;
 
-bool was_whistled = false;              // flaga dmuchniete czy nie
+bool was_whistled = false;      // flaga dmuchniete czy nie
 bool na_minusie = false;
-int press_down_cnt = 0;
+int press_down_cnt = 0;         // licznik cykli odczyt�w [spadek/wzrost co najmniej 2 cykle]
+
 
 time_t current_positive, last_positive, current_timeout; // czas ostatniego dmuchniecia
 time_t btn_current, btn_pressed_at, btn_timeout;
 
 time_t last_blink;      // czas ostatniego blinka diody led
+time_t last_rst_click;
 time_t current_time;    // aktualny czas tu� po wybudzeniu
 
 bool btn_state = LOW;
 bool btn_last_state = LOW;
+int btn_rst_counter = 0;
 
 bool device_is_off = false;
 bool delegate_to_longsleep = false;
@@ -68,7 +71,7 @@ void ISR_INT0_vect()
 }
 
 /*****************************************************
- * Obsluga przycisku
+ * Obsluga przerwania przycisku
  * ***************************************************/
 void ButtonPressed()
 {
@@ -508,10 +511,6 @@ void checkTimeout()
   }  
 }
 
-void Blink()
-{
-
-}
 /**************************
  *  LOOP
  * ************************/
@@ -638,11 +637,37 @@ void loop()
       delegate_to_longsleep = false;  // inaczej pojdzie spac long
                                       // device_is_off pozostaje dla ustalenia czy 
                                       // nadajnik był wybudzony czy pracowal normalnie
+
+      btn_last_state = btn_state;     // do rst
       btn_state = digitalReadFast(USER_SWITCH); // odczyt stanu guzika
       
       //current_time = millis();
 
-      if(btn_state == LOW) // jeśli przycisk nie jest wcisniety lub zostal zwolniony
+      if(btn_state != btn_last_state) // jezeli stan przycisku sie zmienil
+      {
+        if(btn_state == HIGH)         // jezeli jest wysoki
+        {
+          btn_rst_counter++;
+          last_rst_click = current_time;  // zeruj timeout
+        }
+        if(current_time - last_rst_click >= SW_RST_TIMEOUT)
+        {
+          btn_rst_counter = 0;
+          last_rst_click = current_time;  // jezeli reset to reset...
+        }
+        if(btn_rst_counter >= SW_RST_COUNT)
+        {
+          for(int i=0; i<5; i++)
+          {
+            digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
+            delay(100);
+          }
+          softReset();
+        }
+      }
+
+      // jesli przycisk nie jest wcisniety lub zostal zwolniony
+      if(btn_state == LOW)
       {
         btn_pressed_at = current_time; // ustaw obecny czas
         // jesli przycisk zostanie nacisniety ostatnia wartość stad nie bedzie nadpisywana
@@ -670,11 +695,12 @@ void loop()
       {
         if(current_time - btn_pressed_at >= SWITCH_TIMEOUT)
         {
+          // pobudka
           btn_pressed_at = current_time;
           digitalWriteFast(LED_PIN,HIGH);
           delay(1000);
           digitalWriteFast(LED_PIN,LOW);
-          //wakeup
+
           device_is_off = false;
           detachInterrupt(digitalPinToInterrupt(2));
           uc_state = UC_WAKE_AND_CHECK;
@@ -698,34 +724,12 @@ void loop()
           digitalWriteFast(LED_PIN,LOW);
           uc_state = UC_GO_SLEEP;
         }
-        else if(current_time - btn_pressed_at >= SW_RST_TIMEOUT)  // jesli przycisniecie bylo krotkie tylko gdy urzadzenie wlaczone
-        {
-          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
-          delay(100);
-          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
-          delay(100);
-          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
-          delay(100);
-          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
-          delay(100);
-          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
-          delay(100);
-          digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
-          delay(100);
-
-          softReset();
-        }
       }
       else
       {
         // yyyyy...
       }
 
-      Blink();
-
-
-
-      btn_last_state = btn_state; // juz nieptrzebne?
       break;
     }
   }
