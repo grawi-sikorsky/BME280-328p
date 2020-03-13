@@ -507,7 +507,7 @@ void checkTimeout()
   else if(current_timeout > TIMEOUT_2 )
   { 
     delegate_to_longsleep = true;
-    sleeptime = SLEEP_FOREVER;
+    device_is_off= true;
   }  
 }
 
@@ -549,6 +549,9 @@ void loop()
     case UC_WAKE_AND_CHECK:
     {
       readValues();                 // odczyt
+          digitalWriteFast(LED_PIN, HIGH);
+          delay(10);
+          digitalWriteFast(LED_PIN, LOW);
       checkPressure3();             // compare
       current_time = millis();
 
@@ -562,7 +565,7 @@ void loop()
         uc_state = UC_BTN_CHECK;
 
         // blink
-        if(current_time - last_blink >= 200)// 200ms = realnie jakies 5s przez deepsleep.
+        if(current_time - last_blink >= 100)// 200ms = realnie jakies 5s przez deepsleep.
         {                                   // wychodzi ok 25x wolniej niz real
           last_blink = current_time;
           digitalWriteFast(LED_PIN, HIGH);
@@ -702,6 +705,11 @@ void loop()
           digitalWriteFast(LED_PIN,LOW);
 
           device_is_off = false;
+
+          // po dlugim snie moze przy checktimeout wpasc znow w deepsleep
+          // dlatego last positice = teraz
+          last_positive = current_time; 
+
           detachInterrupt(digitalPinToInterrupt(2));
           uc_state = UC_WAKE_AND_CHECK;
         }
