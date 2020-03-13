@@ -27,11 +27,11 @@
 #define VACUUM_IGNORE   1     
 
 #define SWITCH_TIMEOUT  3000          // czas przycisku nacisniecia
-#define SW_RST_TIMEOUT  2000          // czas w ktorym należy wykonac klikniecia dla RST
+#define SW_RST_TIMEOUT  100          // czas w ktorym należy wykonac klikniecia dla RST
 #define SW_RST_COUNT    5             // ilosc nacisniec do wykonania resetu
 #define TIME_TO_WAIT_MS 50            // czas do nastepnego wyzwolenia
-#define TIMEOUT_1       1800000       // pierwszy timeiut // realnie wychodzi jakies (1 800 000 ms = 30 min)
-#define TIMEOUT_2       3600000       // drugi prog = 5 400 000 = 90 min // z uwagi na sleep-millis: 60 min
+#define TIMEOUT_1       72000       // pierwszy timeiut // realnie wychodzi jakies (1 800 000 ms = 30 min) / 25 = 72000
+#define TIMEOUT_2       144000       // drugi prog = 5 400 000 = 90 min // z uwagi na sleep-millis: 60 min
 #define DATA_REPEAT_CNT 2               // ilosc powtorzen transmisji (min 3 lub wiecej)
 
 tiny::BME280 bme1; //Uses I2C address 0x76 (jumper closed)

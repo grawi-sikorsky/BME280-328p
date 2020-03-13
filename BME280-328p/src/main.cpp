@@ -6,7 +6,7 @@ float press_dmuch;
 
 bool was_whistled = false;      // flaga dmuchniete czy nie
 bool na_minusie = false;
-int press_down_cnt = 0;         // licznik cykli odczytów [spadek/wzrost co najmniej 2 cykle]
+int press_down_cnt = 0;         // licznik cykli odczytï¿½w [spadek/wzrost co najmniej 2 cykle]
 
 
 time_t current_positive, last_positive, current_timeout; // czas ostatniego dmuchniecia
@@ -14,7 +14,7 @@ time_t btn_current, btn_pressed_at, btn_timeout;
 
 time_t last_blink;      // czas ostatniego blinka diody led
 time_t last_rst_click;
-time_t current_time;    // aktualny czas tu¿ po wybudzeniu
+time_t current_time;    // aktualny czas tuï¿½ po wybudzeniu
 
 bool btn_state = LOW;
 bool btn_last_state = LOW;
@@ -490,8 +490,8 @@ void checkPressure3()
  * ***************************************************/
 void checkTimeout()
 {
-  current_positive = millis();  // pobierz czas.
-  current_timeout = current_positive - last_positive;
+  //current_positive = millis();  // pobierz czas.
+  //current_timeout = current_positive - last_positive;
 
   current_timeout = current_time - last_positive;
 
@@ -551,7 +551,7 @@ void loop()
       readValues();                 // odczyt
       checkPressure3();             // compare
       current_time = millis();
-                
+
       if (was_whistled == true)     // zmiana -> wysylamy
       {
         uc_state = UC_SENDING_DATA;
@@ -562,13 +562,13 @@ void loop()
         uc_state = UC_BTN_CHECK;
 
         // blink
-        if(current_time - last_blink >= 200)
-        {
+        if(current_time - last_blink >= 200)// 200ms = realnie jakies 5s przez deepsleep.
+        {                                   // wychodzi ok 25x wolniej niz real
           last_blink = current_time;
           digitalWriteFast(LED_PIN, HIGH);
           delay(10);
           digitalWriteFast(LED_PIN, LOW);
-        } 
+        }
       }
       break;
     }
@@ -641,7 +641,7 @@ void loop()
       btn_last_state = btn_state;     // do rst
       btn_state = digitalReadFast(USER_SWITCH); // odczyt stanu guzika
       
-      //current_time = millis();
+      current_time = millis();
 
       if(btn_state != btn_last_state) // jezeli stan przycisku sie zmienil
       {
@@ -657,7 +657,7 @@ void loop()
         }
         if(btn_rst_counter >= SW_RST_COUNT)
         {
-          for(int i=0; i<5; i++)
+          for(int i=0; i<20; i++)
           {
             digitalWriteFast(LED_PIN, !digitalReadFast(LED_PIN));
             delay(100);
