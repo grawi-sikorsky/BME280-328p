@@ -549,9 +549,9 @@ void loop()
     case UC_WAKE_AND_CHECK:
     {
       readValues();                 // odczyt
-          digitalWriteFast(LED_PIN, HIGH);
-          delay(10);
-          digitalWriteFast(LED_PIN, LOW);
+          //digitalWriteFast(LED_PIN, HIGH);
+          //delay(10);
+          //digitalWriteFast(LED_PIN, LOW);
       checkPressure3();             // compare
       current_time = millis();
 
@@ -565,11 +565,11 @@ void loop()
         uc_state = UC_BTN_CHECK;
 
         // blink
-        if(current_time - last_blink >= 100)// 200ms = realnie jakies 5s przez deepsleep.
+        if(current_time - last_blink >= 140)// 200ms = realnie jakies 5s przez deepsleep.
         {                                   // wychodzi ok 25x wolniej niz real
           last_blink = current_time;
           digitalWriteFast(LED_PIN, HIGH);
-          delay(10);
+          delay(15);
           digitalWriteFast(LED_PIN, LOW);
         }
       }
