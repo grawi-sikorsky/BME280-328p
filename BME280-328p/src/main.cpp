@@ -535,12 +535,13 @@ void loop()
       {
         prepareToSleep();
         LowPower.powerDown(sleeptime,ADC_OFF,BOD_OFF);
+        interrupts();
+        uc_state = UC_WAKE_AND_CHECK; // pokima�? to sprawdzi� co sie dzieje->
       }
 
       //digitalWriteFast(5,LOW);
       clock_prescale_set(clock_div_1); // podczas spania 1mhz -> po pobudce 8
-      interrupts();
-      uc_state = UC_WAKE_AND_CHECK; // pokima�? to sprawdzi� co sie dzieje->
+
       break;
     }
 
@@ -713,6 +714,7 @@ void loop()
           detachInterrupt(digitalPinToInterrupt(2));
           uc_state = UC_WAKE_AND_CHECK;
         }
+        //uc_state = UC_GO_SLEEP;// nowe - przemyslec!
       }
 
       // jesli przycisk wcisniety a urzadzenie pracuje normalnie:
