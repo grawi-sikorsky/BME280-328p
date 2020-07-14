@@ -113,7 +113,7 @@ void prepareToSleep()
 void softReset(){
   //asm volatile ("  jmp 0");
   cli(); //irq's off
-  wdt_enable(WDTO_250MS); //wd on,15ms
+  wdt_enable(WDTO_60MS); //wd on,15ms
   while(1); //loop
 }
 
@@ -611,7 +611,7 @@ void loop()
       {
         if(data_repeat > 0)
         {
-          delay(3);
+          delay(10);
           data_repeat--; // jesli ramka cala poszla to zmniejsz ilosc powtorzen..
           BitNr = 0;
           //interrupts();           // przerwania wlacz
